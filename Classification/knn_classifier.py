@@ -15,12 +15,17 @@ def reparametrization(length, sub_rate, replace):
     a.sort()
     return [0] + a.tolist() + [length-1]
 
-def processing(j, dm, x_train, x_test, length, sub_rate, replace):
+def processing(j, dm, x_train, x_test, length, metric, sub_rate, replace):
     reparam = reparametrization(length, sub_rate, replace=replace)
     for i in range(len(x_train)):
-        dm[i,j] = dtw(x_train[i][reparam,:], x_test[j][reparam,:])
+        if metric=='dtw':
+            dm[i,j] = dtw(x_train[i][reparam,:], x_test[j][reparam,:])
+        elif metric=='soft_dtw':
+            dm[i,j] = soft_dtw(x_train[i][reparam,:], x_test[j][reparam,:], gamma=0.1)
+        else:
+            pass
         
-def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, replace=False, n_neighbours=1):
+def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, metric='dtw', replace=False, n_neighbours=1):
     
     ## Creat a temporary directory and define the array path
     temp_folder = tempfile.mkdtemp()
@@ -35,6 +40,7 @@ def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, replace=F
                                             x_train, 
                                             x_test, 
                                             length, 
+                                            metric,
                                             sub_rate, 
                                             replace,
                                             ) for j in range(len(x_test)))
