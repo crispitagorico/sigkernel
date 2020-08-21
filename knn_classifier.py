@@ -8,6 +8,7 @@ import numpy as np
 from scipy.stats import mode
 
 from tslearn.metrics import dtw, soft_dtw
+from sigKer_fast import sig_distance
 from sklearn.metrics import confusion_matrix, accuracy_score, roc_auc_score
 
 def reparametrization(length, sub_rate, replace):
@@ -15,17 +16,19 @@ def reparametrization(length, sub_rate, replace):
     a.sort()
     return [0] + a.tolist() + [length-1]
 
-def processing(j, dm, x_train, x_test, length, metric, sub_rate, replace):
+def processing(j, dm, x_train, x_test, length, metric, sub_rate, replace, gamma, n):
     reparam = reparametrization(length, sub_rate, replace=replace)
     for i in range(len(x_train)):
         if metric=='dtw':
             dm[i,j] = dtw(x_train[i][reparam,:], x_test[j][reparam,:])
         elif metric=='soft_dtw':
-            dm[i,j] = soft_dtw(x_train[i][reparam,:], x_test[j][reparam,:], gamma=0.1)
-        else:
+            dm[i,j] = soft_dtw(x_train[i][reparam,:], x_test[j][reparam,:], gamma)
+        elif metric == 'sig':
+            dm[i,j] = sig_distance(x_train[i][reparam,:], x_test[j][reparam,:], n)
             pass
         
-def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, metric='dtw', replace=False, n_neighbours=1):
+def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, 
+                   metric='dtw', replace=False, n_neighbours=1, gamma=0.1, n=0):
     
     ## Creat a temporary directory and define the array path
     temp_folder = tempfile.mkdtemp()
@@ -43,6 +46,8 @@ def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, metric='d
                                             metric,
                                             sub_rate, 
                                             replace,
+                                            gamma, 
+                                            n,
                                             ) for j in range(len(x_test)))
 
     #Delete the temporary directory and contents
