@@ -1,5 +1,16 @@
 import torch
 
+class SigLoss_torch(torch.nn.Module):
+
+    def __init__(self, n=0):
+        super(SigLoss_torch, self).__init__()
+        self.n = n
+
+    def forward(self, X, Y):
+        d = SigKernel_torch(X,X,self.n) + SigKernel_torch(Y,Y,self.n) - 2.*SigKernel_torch(X,Y,self.n)
+        return torch.mean(d)
+
+
 def SigKernel_torch(X,Y,n=0):
     """
     input
