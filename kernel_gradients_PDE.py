@@ -1,6 +1,6 @@
 import torch
 
-class SigKernel_PDEs(torch.autograd.Function):
+class SigKernel_PDE(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, X, Y,n=0):
@@ -48,7 +48,7 @@ class SigKernel_PDEs(torch.autograd.Function):
 
         ctx.save_for_backward(K_dXY[:, :, :, -1, -1])
 
-        return torch.mean(K_XY[:, -1, -1])
+        return K_XY[:, -1, -1]
 
     @staticmethod
     def backward(ctx, grad_output):

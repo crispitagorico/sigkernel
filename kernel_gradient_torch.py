@@ -1,6 +1,6 @@
 import torch
 
-def SigKernel_AD(X,Y,n=0):
+def SigKernel_torch(X,Y,n=0):
     """
     input
      - X a list of A paths each of shape (M,D)
@@ -30,4 +30,4 @@ def SigKernel_AD(X,Y,n=0):
 
             K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() + K_XY[:, i,j].clone()* increment_XY.clone() - K_XY[ :, i,j].clone()
 
-    return torch.mean(K_XY[:, -1, -1])
+    return K_XY[:, -1, -1]
