@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from sigKer_fast import sig_kernels_fb_batch, sig_kernels_f_batch
+from sigKer_fast import sig_kernels_fb_gram, sig_kernels_f_gram
 
 class SigLoss(torch.nn.Module):
 
@@ -9,7 +9,7 @@ class SigLoss(torch.nn.Module):
         self.n = n
 
     def forward(self, X, Y):
-        d = SigKernel.apply(X,self.n) + SigKernel.apply(Y,self.n) - 2.*SigKernel.apply(X,Y,self.n)
+        d = SigKernel.apply(X,X,self.n) + SigKernel.apply(Y,Y,self.n) - 2.*SigKernel.apply(X,Y,self.n)
         return torch.mean(d)
 
 
@@ -20,11 +20,11 @@ class SigKernel(torch.autograd.Function):
         """
         input
          - X a list of A paths each of shape (M,D)
-         - Y a list of A paths each of shape (N,D)
+         - Y a list of B paths each of shape (N,D)
 
         computes by solving PDEs (forward) and by variation of parameter (backward)
-         -  K_XY: a vector of A pairwise kernel evaluations k(x_i,y_i)      (forward)
-         -  K_dXY: A matrices ( dk_{x_{pq}}(x_i,y_i) )_{p=1,q=1}^{p=M,q=D}  (backward)
+         -  K_XY: a Gram matrix of pairwise kernel evaluations k(x_i,y_j)      (forward)
+         -  K_dXY: ? ( dk_{x_{pq}}(x_i,y_i) )_{p=1,q=1}^{p=M,q=D}  (backward)
         """
         XX, YY, XY = False, False, False
 
@@ -40,43 +40,15 @@ class SigKernel(torch.autograd.Function):
         A = len(X)
         D = X[0].shape[1]
         M = X[0].shape[0]
-        #N = Y[0].shape[0]
-
-        ## kernel K
-        #K = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
-        #K[:, 0, :] = 1.
-        #K[:, :, 0] = 1.
-
-        ## kernel reversed K_rev
-        #K_rev = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
-        #K_rev[:, 0, :] = 1.
-        #K_rev[:, :, 0] = 1.
 
         # 1. FORWARD
         if XX or XY:
-            K, K_rev = sig_kernels_fb_batch(X.detach().numpy(),Y.detach().numpy(),n) 
+            K, K_rev = sig_kernels_fb_gram(X.detach().numpy(),Y.detach().numpy(),n) 
             K_rev = torch.tensor(K_rev, dtype=torch.double)
         else:
-            K =  sig_kernels_f_batch(X.detach().numpy(),Y.detach().numpy(),n) 
+            K =  sig_kernels_f_gram(X.detach().numpy(),Y.detach().numpy(),n) 
         K = torch.tensor(K, dtype=torch.double)
-        #for i in range(0, (2**n)*(M-1)):
-        #    for j in range(0,(2**n)*(N-1)):
-
-        #        ii = int(i / (2 ** n))
-        #        jj = int(j / (2 ** n))
-
-        #        inc_X_i = (X[:, ii + 1, :] - X[:, ii, :])/float(2**n)  # (A,D)
-        #        inc_Y_j = (Y[:, jj + 1, :] - Y[:, jj, :])/float(2**n)  # (A,D)
-
-        #        inc_X_rev_i = (X[:, (M-1)-(ii + 1), :] - X[:, (M-1)-ii, :])/float(2**n)  # (A,D)
-        #        inc_Y_rev_j = (Y[:, (N-1)-(jj + 1), :] - Y[:, (N-1)-jj, :])/float(2**n)  # (A,D)
-
-        #        prod_inc = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j)  # (A) <-> A dots prod bwn R^D and R^D
-        #        K[:, i + 1, j + 1] = K[:, i + 1, j] + K[:, i, j + 1] + K[:, i,j]* prod_inc - K[ :, i,j]
-
-        #        prod_inc_rev = torch.einsum('ik,ik->i', inc_X_rev_i, inc_Y_rev_j)
-        #        K_rev[:, i + 1, j + 1] = K_rev[:, i + 1, j] + K_rev[:, i, j + 1] + K_rev[:, i, j] * prod_inc_rev - K_rev[:, i, j]
-
+ 
         # 2. GRADIENTS
         if XX or XY: # no need to compute this 
             # Need to get the increments of Y on the finer grid
@@ -97,7 +69,7 @@ class SigKernel(torch.autograd.Function):
 
             ctx.save_for_backward((K_grad,XX,YY,XY))
         
-        return K[:,-1,-1]
+        return K[:,:,-1,-1]  #(A,B)
 
     @staticmethod
     def backward(ctx, grad_output):
