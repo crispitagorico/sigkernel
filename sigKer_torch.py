@@ -29,7 +29,7 @@ class SigKernel(torch.autograd.Function):
         XX, YY, XY = False, False, False
 
         if Y is None:
-            Y = X.detach().clone() # check that X is not detached
+            Y = X.detach().clone() 
             if X.requires_grad:
                 XX = True
             else:

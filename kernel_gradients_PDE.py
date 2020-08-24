@@ -64,4 +64,6 @@ class SigKernel_PDE(torch.autograd.Function):
         D = grad_incr.shape[2]
         grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64)], dim=1)+ torch.cat([torch.zeros((A, 1, D)).type(torch.float64), grad_incr], dim=1)
 
+        # This is wrong. We need to know if we have terms of the form k(x_i,x_i). In this case multiply by 2. 
+        # see code kernel_gradient_torch.py.
         return (1./A)*grad_points, None, None
