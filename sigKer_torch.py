@@ -107,8 +107,6 @@ class SigKernel(torch.autograd.Function):
         """
         During the forward pass, the gradients with respect to each increment in each dimension has been computed.
         Here we derive the gradients with respect to the points of the time series.
-
-        For computational efficiency, we do not use grad_output, and compute directly dL_XX/dX or dL_XY/dX
         """
 
         XX, YY, XY = ctx.XX, ctx.YY, ctx.XY
@@ -120,11 +118,16 @@ class SigKernel(torch.autograd.Function):
             grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64), grad_incr], dim=1)
 
         if XX:
-            return (1./A)*2.*grad_points, None, None  
+            # remark1: grad_points=\sum_a dKa/dX, whilst dL/dX = \sum_a grad_output[a]*dKa/dX
+            # where dKa/dX is a tensor of shape (A,M,N) with zeros everywhere except for Ka[a,:,:].
+            # we need to 'inject grad_output' in grad_points, it corresponds to do grad_output[a]*grad_points[a,:,:]
+            # remark2: KXX is bilinear, and grad_points is the gradient with respect to the left variable -> we need to multiply by 2
+            return 2.*grad_output[:,None,None]*grad_points, None, None  
         if YY:
             return None, None, None
         if XY:
-            return -2.*(1./A)*grad_points, None, None
+            # see remark 1
+            return grad_output[:,None,None]*grad_points, None, None
 
 
 
