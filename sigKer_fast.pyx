@@ -184,7 +184,7 @@ def sig_kernels_fb_mmd(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False
 
 	else:
 		for l in range(A):
-			for m in range(A):
+			for m in range(B):
 
 				for i in range(MM+1):
 					K[l,m,i,0] = 1.
