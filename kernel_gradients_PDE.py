@@ -64,4 +64,4 @@ class SigKernel_PDE(torch.autograd.Function):
         D = grad_incr.shape[2]
         grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64)], dim=1)+ torch.cat([torch.zeros((A, 1, D)).type(torch.float64), grad_incr], dim=1)
 
-        return grad_points, None, None
+        return (1./A)*grad_points, None, None
