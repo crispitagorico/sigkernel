@@ -9,7 +9,7 @@ class SigLoss(torch.nn.Module):
         self.n = n
 
     def forward(self, X, Y):
-        d = SigKernel.apply(X,self.n) + SigKernel.apply(Y,self.n) - 2.*SigKernel.apply(X,Y,self.n)
+        d = SigKernel.apply(X,None,self.n) + SigKernel.apply(Y,None,self.n) - 2.*SigKernel.apply(X,Y,self.n)
         return torch.mean(d)
 
 
@@ -29,7 +29,7 @@ class SigKernel(torch.autograd.Function):
         XX, YY, XY = False, False, False
 
         if Y is None:
-            Y = X.detach().copy() # check that X is not detached
+            Y = X.detach().clone() # check that X is not detached
             if X.requires_grad:
                 XX = True
             else:
@@ -95,8 +95,10 @@ class SigKernel(torch.autograd.Function):
 
             K_grad =  torch.sum(K_grad.reshape(A,M-1,2**n,D),axis=2)       # (A,M-1,D)
 
-            ctx.save_for_backward((K_grad,XX,YY,XY))
+            ctx.save_for_backward(K_grad)
         
+        ctx.XX, ctx.YY, ctx.XY = XX, YY, XY
+
         return K[:,-1,-1]
 
     @staticmethod
@@ -107,9 +109,11 @@ class SigKernel(torch.autograd.Function):
         Here we derive the gradients with respect to the points of the time series.
         """
 
-        grad_incr, XX, YY, XY = ctx.saved_tensors
+        print(grad_output)
+        XX, YY, XY = ctx.XX, ctx.YY, ctx.XY
 
         if XX or XY:
+            grad_incr, = ctx.saved_tensors
             A = grad_incr.shape[0]
             D = grad_incr.shape[2]
             grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64), grad_incr], dim=1)

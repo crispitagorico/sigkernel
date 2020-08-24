@@ -24,7 +24,7 @@ def processing(j, dm, x_train, x_test, length, metric, sub_rate, replace, gamma,
         elif metric=='soft_dtw':
             dm[i,j] = soft_dtw(x_train[i][reparam,:], x_test[j][reparam,:], gamma)
         elif metric == 'sig':
-            dm[i,j] = sig_distance(x_train[i][reparam,:], x_test[j][reparam,:], n)
+            dm[i,j] = np.sqrt(sig_distance(x_train[i][reparam,:], x_test[j][reparam,:], n))
             pass
         
 def knn_classifier(x_train, x_test, y_train, y_test, sub_rate, length, 
