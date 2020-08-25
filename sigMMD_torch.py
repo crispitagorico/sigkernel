@@ -1,19 +1,22 @@
 import numpy as np
 import torch
-from sigKer_fast import sig_kernels_fb_gram, sig_kernels_f_gram
+from sigKer_fast import sig_kernels_fb_mmd, sig_kernels_f_mmd
 
-class SigLoss(torch.nn.Module):
+class SigLoss_MMD(torch.nn.Module):
 
     def __init__(self, n=0):
-        super(SigLoss, self).__init__()
+        super(SigLoss_MMD, self).__init__()
         self.n = n
 
     def forward(self, X, Y):
-        d = SigKernel.apply(X,X,self.n) + SigKernel.apply(Y,Y,self.n) - 2.*SigKernel.apply(X,Y,self.n)
-        return torch.mean(d)
+        K_XX = SigKernel_Gram.apply(X,None,self.n)
+        K_YY = SigKernel_Gram.apply(Y,None,self.n)
+        K_XY = SigKernel_Gram.apply(X,Y,self.n)
+        MMD_squared = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
+        return MMD_squared
 
 
-class SigKernel(torch.autograd.Function):
+class SigKernel_Gram(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, X, Y=None, n=0):
@@ -23,13 +26,13 @@ class SigKernel(torch.autograd.Function):
          - Y a list of B paths each of shape (N,D)
 
         computes by solving PDEs (forward) and by variation of parameter (backward)
-         -  K_XY: a Gram matrix of pairwise kernel evaluations k(x_i,y_j)      (forward)
-         -  K_dXY: ? ( dk_{x_{pq}}(x_i,y_i) )_{p=1,q=1}^{p=M,q=D}  (backward)
+         -  (forward) K_XY: a Gram matrix of pairwise kernel evaluations k(x_i,y_j)   (A,B,M,D)  
+         - (backward) K_dXY: Gram matrix of gradients ( dk(x_i,y_j)/dx_i )_{i,j} (A,B,M,D)   
         """
         XX, YY, XY = False, False, False
 
         if Y is None:
-            Y = X.detach().copy() # check that X is not detached
+            Y = X.detach().clone() 
             if X.requires_grad:
                 XX = True
             else:
@@ -38,60 +41,73 @@ class SigKernel(torch.autograd.Function):
             XY = True
 
         A = len(X)
+        B = len(Y)
         D = X[0].shape[1]
         M = X[0].shape[0]
 
         # 1. FORWARD
-        if XX or XY:
-            K, K_rev = sig_kernels_fb_gram(X.detach().numpy(),Y.detach().numpy(),n) 
+        if XX:
+            K, K_rev = sig_kernels_fb_mmd(X.detach().numpy(),Y.detach().numpy(),n,sym=True) 
+            K_rev = torch.tensor(K_rev, dtype=torch.double)
+        elif XY:
+            K, K_rev =  sig_kernels_fb_mmd(X.detach().numpy(),Y.detach().numpy(),n,sym=False) 
             K_rev = torch.tensor(K_rev, dtype=torch.double)
         else:
-            K =  sig_kernels_f_gram(X.detach().numpy(),Y.detach().numpy(),n) 
+            K = sig_kernels_f_mmd(Y.detach().numpy(),n) 
         K = torch.tensor(K, dtype=torch.double)
- 
+      
         # 2. GRADIENTS
-        if XX or XY: # no need to compute this 
+        if XX or XY: 
             # Need to get the increments of Y on the finer grid
-            inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)  #(A,M-1,D)  increments defined by the data
-            inc_Y = tile(inc_Y,1,2**n)                  #(A,(2**n)*(M-1),D)  increments on the finer grid
+            inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)  #(B,N-1,D)  increments defined by the data
+            inc_Y = tile(inc_Y,1,2**n)                  #(B,(2**n)*(N-1),D)  increments on the finer grid
 
             # Need to reorganize the K_rev matrix
-            K_rev_rev = flip(K_rev,dim=1)
-            K_rev_rev = flip(K_rev_rev,dim=2)
+            K_rev_rev = flip(K_rev,dim=2)              # (A,B,(2**n)*(M-1),(2**n)*(N-1))
+            K_rev_rev = flip(K_rev_rev,dim=3)          # (A,B,(2**n)*(M-1),(2**n)*(N-1))
 
-            KK = (K[:,:-1,:-1] * K_rev_rev[:,1:,1:])                       # (A,(2**n)*(M-1),(2**n)*(N-1))
+            KK = (K[:,:,:-1,:-1] * K_rev_rev[:,:,1:,1:])                       # (A,B,(2**n)*(M-1),(2**n)*(N-1))
 
-            K_grad = KK[:,:,:,None]*inc_Y[:,None,:,:]                      # (A,(2**n)*(M-1),(2**n)*(N-1),D)
+            K_grad = KK[:,:,:,:,None]*inc_Y[None,:,None,:,:]                   # (A,B,(2**n)*(M-1),(2**n)*(N-1),D)
 
-            K_grad = (1./(2**n))*torch.sum(K_grad,axis=2)                  # (A,(2**n)*(M-1),D)
+            K_grad = (1./(2**n))*torch.sum(K_grad,axis=3)                      # (A,B,(2**n)*(M-1),D)
 
-            K_grad =  torch.sum(K_grad.reshape(A,M-1,2**n,D),axis=2)       # (A,M-1,D)
+            K_grad =  torch.sum(K_grad.reshape(A,B,M-1,2**n,D),axis=3)         # (A,B, M-1,D)
 
-            ctx.save_for_backward((K_grad,XX,YY,XY))
+            ctx.save_for_backward(K_grad)
         
-        return K[:,:,-1,-1]  #(A,B)
+        ctx.XX, ctx.YY, ctx.XY = XX, YY, XY
+
+        return K[:,:,-1,-1]
 
     @staticmethod
     def backward(ctx, grad_output):
 
         """
-        During the forward pass, the gradients with respect to each increment in each dimension has been computed.
+        1. During the forward pass, the gradients with respect to each increment in each dimension has been computed.
         Here we derive the gradients with respect to the points of the time series.
+        2. grad_output contains dL/dK_XY 
         """
 
-        grad_incr, XX, YY, XY = ctx.saved_tensors
+        XX, YY, XY = ctx.XX, ctx.YY, ctx.XY
 
         if XX or XY:
+            # from gradients w.r.t. increments to gradients w.r.t. points of the time series.
+            grad_incr, = ctx.saved_tensors
             A = grad_incr.shape[0]
-            D = grad_incr.shape[2]
-            grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64), grad_incr], dim=1)
+            B = grad_incr.shape[1]
+            D = grad_incr.shape[3]
+            grad_points = -torch.cat([grad_incr,torch.zeros((A, B, 1, D)).type(torch.float64)], dim=2) + torch.cat([torch.zeros((A, B,1, D)).type(torch.float64), grad_incr], dim=2)
 
         if XX:
-            return 2*grad_points, None, None
+            grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+            return grad, None, None  
         if YY:
             return None, None, None
         if XY:
-            return grad_points, None, None
+            # dL/dX = dL/dK dK/dX = (\sum_j dL/dKij dKij/dXi)_i = (\sum_j{ grad_out_ij * dKij/dXi})_i for any loss L
+            grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
+            return grad, None, None
 
 
 
