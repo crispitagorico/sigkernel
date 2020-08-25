@@ -40,17 +40,6 @@ class SigKernel(torch.autograd.Function):
         A = len(X)
         D = X[0].shape[1]
         M = X[0].shape[0]
-        #N = Y[0].shape[0]
-
-        ## kernel K
-        #K = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
-        #K[:, 0, :] = 1.
-        #K[:, :, 0] = 1.
-
-        ## kernel reversed K_rev
-        #K_rev = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
-        #K_rev[:, 0, :] = 1.
-        #K_rev[:, :, 0] = 1.
 
         # 1. FORWARD
         if XX or XY:
@@ -59,23 +48,6 @@ class SigKernel(torch.autograd.Function):
         else:
             K =  sig_kernels_f_batch(X.detach().numpy(),Y.detach().numpy(),n) 
         K = torch.tensor(K, dtype=torch.double)
-        #for i in range(0, (2**n)*(M-1)):
-        #    for j in range(0,(2**n)*(N-1)):
-
-        #        ii = int(i / (2 ** n))
-        #        jj = int(j / (2 ** n))
-
-        #        inc_X_i = (X[:, ii + 1, :] - X[:, ii, :])/float(2**n)  # (A,D)
-        #        inc_Y_j = (Y[:, jj + 1, :] - Y[:, jj, :])/float(2**n)  # (A,D)
-
-        #        inc_X_rev_i = (X[:, (M-1)-(ii + 1), :] - X[:, (M-1)-ii, :])/float(2**n)  # (A,D)
-        #        inc_Y_rev_j = (Y[:, (N-1)-(jj + 1), :] - Y[:, (N-1)-jj, :])/float(2**n)  # (A,D)
-
-        #        prod_inc = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j)  # (A) <-> A dots prod bwn R^D and R^D
-        #        K[:, i + 1, j + 1] = K[:, i + 1, j] + K[:, i, j + 1] + K[:, i,j]* prod_inc - K[ :, i,j]
-
-        #        prod_inc_rev = torch.einsum('ik,ik->i', inc_X_rev_i, inc_Y_rev_j)
-        #        K_rev[:, i + 1, j + 1] = K_rev[:, i + 1, j] + K_rev[:, i, j + 1] + K_rev[:, i, j] * prod_inc_rev - K_rev[:, i, j]
 
         # 2. GRADIENTS
         if XX or XY: # no need to compute this 
