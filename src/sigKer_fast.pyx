@@ -46,7 +46,14 @@ def sig_distance(double[:,:] x, double[:,:] y, int n=0):
 	return a + b - 2.*c
 
 
-def sig_kernels_mmd(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
+def Esig_mmd_distance(double[:,:,:] x, double[:,:,:] y, int n=0):
+	cdef double[:,:] K_XX = sig_Gram_matrix(x,x,n,sym=True)
+    cdef double[:,:] K_YY = sig_Gram_matrix(y,y,n,sym=True)
+    cdef double[:,:] K_XY = sig_Gram_matrix(x,y,n,sym=False)
+    return (np.mean(K_XX) + np.mean(K_YY) - 2.*np.mean(K_XY))**(0.5)
+
+
+def sig_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 
 	cdef int A = x.shape[0]
 	cdef int B = y.shape[0]
@@ -110,4 +117,4 @@ def sig_kernels_mmd(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 	
 						K[l,m,i+1,j+1] = K[l,m,i,j+1] + K[l,m,i+1,j] + (increment-1.)*K[l,m,i,j]
 	
-	return K
+	return K[:,:,-1,-1]
