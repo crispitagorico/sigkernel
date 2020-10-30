@@ -117,4 +117,4 @@ def sig_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 	
 						K[l,m,i+1,j+1] = K[l,m,i,j+1] + K[l,m,i+1,j] + (increment-1.)*K[l,m,i,j]
 	
-	return K[:,:,-1,-1]
+	return K[:,:,MM,NN]
