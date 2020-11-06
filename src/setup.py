@@ -1,6 +1,16 @@
-from setuptools import setup
+from setuptools import Extension, setup
 from Cython.Build import cythonize
 
+ext_modules = [
+    Extension(
+        "sigKer_fast",
+        ["sigKer_fast.pyx"],
+        #extra_compile_args=['/openmp'],
+        #extra_link_args=['/openmp'],
+    )
+]
+
 setup(
-    ext_modules = cythonize("sigKer_fast.pyx")
+    name='sigKer-fast',
+    ext_modules=cythonize(ext_modules),
 )
