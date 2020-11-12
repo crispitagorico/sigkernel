@@ -10,6 +10,7 @@ import copy
 import iisignature
 from tools import brownian
 from transformers import AddTime 
+from scipy.spatial.distance import pdist
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -24,6 +25,17 @@ def treeEsig(tree, truncation):
         ES_forest = sum([treeEsig(t, truncation) for t in forest])
         ES = iisignature.sigcombine(ES, ES_forest, path_dim, truncation)
     return w*ES
+
+
+def treeMahalanobisDistance(list_of_trees, truncation):
+    """Function computing the Mahalanobis distance matrix of elements of one list of trees."""
+    X = [treeEsig(t, truncation) for t in list_of_trees]
+    V = np.cov(np.array(X).T)
+    try:
+        Vi = np.linalg.inv(V)
+    except:
+        Vi = np.linalg.pinv(V) # in case the cov matrix is singular use pseudo-inverse
+    return pdist(X, 'mahalanobis', VI=Vi)
 
 
 def treeDistance(tree1, tree2, truncation):
