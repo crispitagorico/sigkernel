@@ -3,16 +3,20 @@
 
 import numpy as np
 
+def forward_step(double k_00, double k_01, double k_10, double increment):
+	return (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
+
 def sig_kernel(double[:,:] x, double[:,:] y, int n=0):
-	
-	cdef int D = x.shape[1]
+
 	cdef int M = x.shape[0]
 	cdef int N = y.shape[0]
+	cdef int D = x.shape[1]
 
 	cdef double increment
 	cdef double factor = 2**(2*n)
 
-	cdef int i, j, k, ii, jj
+	cdef int i, j, k, l, ii, jj
+
 	cdef int MM = (2**n)*(M-1)
 	cdef int NN = (2**n)*(N-1)
 
@@ -32,11 +36,11 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0):
 
 			increment = 0.
 			for k in range(D):
-				increment += (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
+				increment = increment +  (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor 
 
-			K[i+1,j+1] = K[i,j+1] + K[i+1,j] + increment*K[i,j] - K[i,j]
+			K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
 
-	return K[MM,NN]
+	return K
 
 
 def sig_distance(double[:,:] x, double[:,:] y, int n=0):
@@ -91,7 +95,8 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 						increment = 0.
 						for k in range(D):
 							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
-						K[l,m,i+1,j+1] = K[l,m,i,j+1] + K[l,m,i+1,j] + (increment-1.)*K[l,m,i,j]
+						
+						K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 						K[m,l,i+1,j+1] = K[l,m,i+1,j+1]
 
 
@@ -115,6 +120,6 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 						for k in range(D):
 							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 	
-						K[l,m,i+1,j+1] = K[l,m,i,j+1] + K[l,m,i+1,j] + (increment-1.)*K[l,m,i,j]
+						K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 	
 	return K[:,:,MM,NN]
