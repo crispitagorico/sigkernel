@@ -2603,7 +2603,7 @@ static PyObject *__pyx_pf_11sigKer_fast_2sig_kernel(CYTHON_UNUSED PyObject *__py
  * 
  * 			increment = 0.             # <<<<<<<<<<<<<<
  * 			for k in range(D):
- * 				increment = increment +  (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
+ * 				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
  */
       __pyx_v_increment = 0.;
 
@@ -2611,7 +2611,7 @@ static PyObject *__pyx_pf_11sigKer_fast_2sig_kernel(CYTHON_UNUSED PyObject *__py
  * 
  * 			increment = 0.
  * 			for k in range(D):             # <<<<<<<<<<<<<<
- * 				increment = increment +  (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
+ * 				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
  * 
  */
       __pyx_t_17 = __pyx_v_D;
@@ -2622,7 +2622,7 @@ static PyObject *__pyx_pf_11sigKer_fast_2sig_kernel(CYTHON_UNUSED PyObject *__py
         /* "sigKer_fast.pyx":39
  * 			increment = 0.
  * 			for k in range(D):
- * 				increment = increment +  (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor             # <<<<<<<<<<<<<<
+ * 				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor             # <<<<<<<<<<<<<<
  * 
  * 			K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
  */
@@ -2643,11 +2643,11 @@ static PyObject *__pyx_pf_11sigKer_fast_2sig_kernel(CYTHON_UNUSED PyObject *__py
       }
 
       /* "sigKer_fast.pyx":41
- * 				increment = increment +  (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
+ * 				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor
  * 
  * 			K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)             # <<<<<<<<<<<<<<
  * 
- * 	return K
+ * 	return K[MM,NN]
  */
       __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_forward_step); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 41, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
@@ -2735,12 +2735,14 @@ static PyObject *__pyx_pf_11sigKer_fast_2sig_kernel(CYTHON_UNUSED PyObject *__py
   /* "sigKer_fast.pyx":43
  * 			K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
  * 
- * 	return K             # <<<<<<<<<<<<<<
+ * 	return K[MM,NN]             # <<<<<<<<<<<<<<
  * 
  * 
  */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_5 = __pyx_memoryview_fromslice(__pyx_v_K, 2, (PyObject *(*)(char *)) __pyx_memview_get_double, (int (*)(char *, PyObject *)) __pyx_memview_set_double, 0);; if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 43, __pyx_L1_error)
+  __pyx_t_25 = __pyx_v_MM;
+  __pyx_t_24 = __pyx_v_NN;
+  __pyx_t_5 = PyFloat_FromDouble((*((double *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_K.data + __pyx_t_25 * __pyx_v_K.strides[0]) ) + __pyx_t_24 * __pyx_v_K.strides[1]) )))); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 43, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_5);
   __pyx_r = __pyx_t_5;
   __pyx_t_5 = 0;

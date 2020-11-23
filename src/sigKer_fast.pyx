@@ -36,11 +36,11 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0):
 
 			increment = 0.
 			for k in range(D):
-				increment = increment +  (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor 
+				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor 
 
 			K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
 
-	return K
+	return K[MM,NN]
 
 
 def sig_distance(double[:,:] x, double[:,:] y, int n=0):
