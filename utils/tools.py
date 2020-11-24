@@ -4,16 +4,15 @@ import numpy as np
 from scipy.ndimage.interpolation import shift
 import math
 
-def naive_SigKernel_iisig(X, Y, depth):
-    sig_x = iisignature.sig(X, depth)
-    sig_y = iisignature.sig(Y, depth)
-    return 1. + np.sum([x*y for x,y in zip(sig_x, sig_y)], dtype=np.double)
+def naive_sig_kernel(x,y,depth):
+    sigx = iisignature.sig(x,depth,2)
+    sigy = iisignature.sig(y,depth,2)
+    k_true = np.ones((len(x),len(y)))
+    for i,sx in enumerate(sigx):
+        for j,sy in enumerate(sigy):
+            k_true[i+1,j+1] = 1.+np.dot(sigx[i],sigy[j])
+    return k_true
 
-def naive_SigKernel_esig(X, Y, depth):
-    sig_x = sig.stream2sig(X, depth)
-    sig_y = sig.stream2sig(Y, depth)
-    return np.sum([x*y for x,y in zip(sig_x, sig_y)], dtype=np.float64)
-    
 def white(steps, width, time=1.):
     mu, sigma = 0, math.sqrt(time / steps) 
     return np.random.normal(mu, sigma, (steps, width))
@@ -61,3 +60,31 @@ def truncated_sigKernel(X, num_levels, order=-1, difference=True, sigma=1.):
         R = R_next
         K += sigma[m+1] * np.sum(R, axis=(0, 1, 3, 5))
     return K
+
+
+def generate(M, N, h_x=0.8, h_y=0.8, scale=1., signature=False, BM=False, dim_BM=2):
+    
+    if BM:
+        X = brownian(M-1, dim_BM, time=1.)
+        Y = brownian(N-1, dim_BM, time=1.)
+
+    else:
+        fbm_generator_X = FBM(M-1, h_x)
+        fbm_generator_Y = FBM(N-1, h_y)
+
+        x = scale*fbm_generator_X.fbm()
+        y = scale*fbm_generator_Y.fbm()
+
+        X = AddTime().fit_transform([x])[0]
+        Y = AddTime().fit_transform([y])[0]
+    
+    if signature:
+        X = iisignature.sig(X,5,2)
+        Y = iisignature.sig(Y,5,2)
+
+        X0 = np.zeros_like(X[0,:].reshape(1,-1))
+        X0[0,0] = 1.
+        X = np.concatenate([X0, X])
+        Y = np.concatenate([X0, Y])
+        
+    return X, Y

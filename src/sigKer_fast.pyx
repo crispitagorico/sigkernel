@@ -3,10 +3,13 @@
 
 import numpy as np
 
-def forward_step(double k_00, double k_01, double k_10, double increment):
+def forward_step_explicit(double k_00, double k_01, double k_10, double increment):
 	return (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
 
-def sig_kernel(double[:,:] x, double[:,:] y, int n=0):
+def forward_step_implicit(double k_00, double k_01, double k_10, double increment):
+	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10)
+
+def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint implicit=True):
 
 	cdef int M = x.shape[0]
 	cdef int N = y.shape[0]
@@ -38,9 +41,15 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0):
 			for k in range(D):
 				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor 
 
-			K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
+			if implicit:
+				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)
+			else:
+				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
 
-	return K[MM,NN]
+	if full:
+		return np.array(K)
+	else:
+		return K[MM,NN]
 
 
 def sig_distance(double[:,:] x, double[:,:] y, int n=0):
@@ -96,7 +105,7 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 						for k in range(D):
 							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 						
-						K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 						K[m,l,i+1,j+1] = K[l,m,i+1,j+1]
 
 
@@ -120,6 +129,6 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 						for k in range(D):
 							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 	
-						K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 	
-	return K[:,:,MM,NN]
+	return np.array(K[:,:,MM,NN])
