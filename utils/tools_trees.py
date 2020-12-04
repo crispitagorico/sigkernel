@@ -8,9 +8,10 @@ import numpy as np
 import random
 import copy
 import iisignature
-from tools import brownian
+from tools import brownian, brownian_perturbed
 from transformers import AddTime 
-from scipy.spatial.distance import pdist
+from scipy.spatial.distance import cdist
+from sklearn.metrics import pairwise_distances
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -27,15 +28,16 @@ def treeEsig(tree, truncation):
     return w*ES
 
 
-def treeMahalanobisDistance(list_of_trees, truncation):
-    """Function computing the Mahalanobis distance matrix of elements of one list of trees."""
-    X = [treeEsig(t, truncation) for t in list_of_trees]
+def treeMahalanobisDistance(list_of_trees1, list_of_trees2, truncation):
+    X = [treeEsig(t, truncation) for t in list_of_trees1]
     V = np.cov(np.array(X).T)
     try:
         Vi = np.linalg.inv(V)
     except:
-        Vi = np.linalg.pinv(V) # in case the cov matrix is singular use pseudo-inverse
-    return pdist(X, 'mahalanobis', VI=Vi)
+        Vi = np.linalg.pinv(V)
+    Y = [treeEsig(t, truncation) for t in list_of_trees2]
+    cd = pairwise_distances(X, Y, 'mahalanobis', VI=Vi, n_jobs=-1)
+    return cd
 
 
 def treeDistance(tree1, tree2, truncation):
@@ -100,18 +102,20 @@ def treePairwiseDistanceMatrix(list_of_trees1, list_of_trees2, truncation):
     return storing_matrix
 
 
-def generate_brownian_tree(depth, dim, value, min_branches=2, max_branches=5, min_steps=50, max_steps=500, rand=True):
+def generate_brownian_tree(depth, dim, value, min_branches=2, max_branches=5, min_steps=50, max_steps=500, rand=False, perturb=False):
     """Function generating a Brownian tree of the form of a dictionary
        
        return:
            P = {'value': (weight, path), 'forest': [P1, ..., PN]) 
            
        input:
-           depth (int): depth of the tree, 
-           dim (int): dimension of the brownian pathlets
+           depth (int): depth of the tree.
+           dim (int): dimension of the brownian pathlets.
            value (tuple): root node information (float, array) := (weight, path)
-           min_branches, max_branches (both int): min and max amount of branches at every tree-splitting
-           min_steps, max_steps (both int): min and max number of steps in Brownian pathlets
+           min_branches, max_branches (both int): min and max amount of branches at every tree-splitting.
+           min_steps, max_steps (both int): min and max number of steps in Brownian pathlets.
+           rand (bool) if True random weights, otherwise uniform weights.
+           perturb (bool) if True perturb Brownian paths.
        """
     
     if depth==1:
@@ -124,12 +128,14 @@ def generate_brownian_tree(depth, dim, value, min_branches=2, max_branches=5, mi
         else:
             weights = [1. for i in range(N)]
         weights = [w/sum(weights) for w in weights]
-        
-        paths = [brownian(steps,dim) for k in range(N)]
+        if perturb:
+            paths = [brownian_perturbed(steps,dim,amplitude=np.random.uniform(-2,2)) for k in range(N)]
+        else:
+            paths = [brownian(steps,dim) for k in range(N)]
         paths = AddTime().fit_transform(paths)
         paths = [p + value[1][-1,:] for p in paths]
         forest =  [generate_brownian_tree(depth-1, dim, (w,p), min_branches, max_branches, 
-                                          min_steps, max_steps, rand) for w,p in zip(weights, paths)]
+                                          min_steps, max_steps, rand, perturb) for w,p in zip(weights, paths)]
         
     return {'value':value, 'forest':forest}
 

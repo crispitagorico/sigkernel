@@ -22,6 +22,12 @@ def brownian(steps, width, time=1.):
     np.cumsum(white(steps, width, time), axis=0, out=path[1:, :])
     return path
 
+def brownian_perturbed(steps, width, time=1., amplitude=1.):
+    path = brownian(steps, width, time)
+    t = np.random.randint(steps)
+    path[t:] = path[t:] + amplitude
+    return path
+
 def truncated_sigKernel(X, num_levels, order=-1, difference=True, sigma=1.):
     """
     Computes the (truncated) signature kernel matrix of a given array of sequences. 
