@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from sigKer_fast import sig_kernels_fb_batch, sig_kernels_f_batch
+from sigKer_fast import sig_kernel_batch
 
 class SigLoss(torch.nn.Module):
 
@@ -9,8 +9,8 @@ class SigLoss(torch.nn.Module):
         self.n = n
 
     def forward(self, X, Y):
-        d = SigKernel.apply(X,None,self.n) + SigKernel.apply(Y,None,self.n) - 2.*SigKernel.apply(X,Y,self.n)
-        return torch.mean(d)
+        dist = SigKernel.apply(X,None,self.n) + SigKernel.apply(Y,None,self.n) - 2.*SigKernel.apply(X,Y,self.n)
+        return torch.mean(dist)
 
 
 class SigKernel(torch.autograd.Function):
@@ -43,10 +43,10 @@ class SigKernel(torch.autograd.Function):
 
         # 1. FORWARD
         if XX or XY:
-            K, K_rev = sig_kernels_fb_batch(X.detach().numpy(),Y.detach().numpy(),n) 
+            K, K_rev = sig_kernel_batch(X.detach().numpy(),Y.detach().numpy(),n,gradients=True) 
             K_rev = torch.tensor(K_rev, dtype=torch.double)
         else:
-            K =  sig_kernels_f_batch(X.detach().numpy(),Y.detach().numpy(),n) 
+            K =  sig_kernel_batch(X.detach().numpy(),Y.detach().numpy(),n,gradients=False) 
         K = torch.tensor(K, dtype=torch.double)
 
         # 2. GRADIENTS
@@ -143,7 +143,11 @@ def SigKernel_naive(X,Y,n=0):
 
             increment_XY = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j)  # (A) <-> A dots prod bwn R^D and R^D
 
-            K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() + K_XY[:, i,j].clone()* increment_XY.clone() - K_XY[ :, i,j].clone()
+            # implicit scheme 
+            K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() - K_XX[:, i, j].clone() + ( K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() )*0.5*increment_XY.clone()*((1.-0.25*increment_XY.clone())**(-1))
+
+            # explicit scheme
+            #K_XY[:, i + 1, j + 1] = ( K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() )*(1.+0.5*increment_XY.clone()+(1./12)*increment_XY.clone()**2) - K_XY[:, i, j].clone()*(1.-(1./12)*increment_XY.clone()**2)
 
     return K_XY[:, -1, -1]
 
