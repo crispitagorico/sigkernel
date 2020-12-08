@@ -2,7 +2,35 @@ import iisignature
 from esig import tosig as sig
 import numpy as np
 from scipy.ndimage.interpolation import shift
+from scipy.integrate import odeint
 import math
+
+def Lorenz_(state, t):
+    # unpack the state vector
+    x = state[0]
+    y = state[1]
+    z = state[2]
+
+    # constants for dynamics
+    sigma=10.
+    rho=28.
+    beta=8./3.
+
+    # compute state derivatives
+    xd = sigma * (y-x)
+    yd = (rho-z)*x - y
+    zd = x*y - beta*z
+
+    # return the state derivatives
+    return [xd, yd, zd]
+
+def random_ic(a=1,b=5):
+    return [np.random.uniform(a,b),np.random.uniform(a,b),np.random.uniform(a,b)]
+
+def Lorenz(N, time_steps, T=10.):
+    t = np.arange(0., T, T/time_steps)
+    return [0.1*(odeint(Lorenz_, random_ic(), t)+brownian(time_steps-1,3)) for k in range(N)]
+
 
 def naive_sig_kernel(x,y,depth):
     sigx = iisignature.sig(x,depth,2)

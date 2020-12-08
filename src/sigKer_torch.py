@@ -144,7 +144,7 @@ def SigKernel_naive(X,Y,n=0):
             increment_XY = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j)  # (A) <-> A dots prod bwn R^D and R^D
 
             # implicit scheme 
-            K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() - K_XX[:, i, j].clone() + ( K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() )*0.5*increment_XY.clone()*((1.-0.25*increment_XY.clone())**(-1))
+            K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() - K_XY[:, i, j].clone() + ( K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() )*0.5*increment_XY.clone()*((1.-0.25*increment_XY.clone())**(-1))
 
             # explicit scheme
             #K_XY[:, i + 1, j + 1] = ( K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() )*(1.+0.5*increment_XY.clone()+(1./12)*increment_XY.clone()**2) - K_XY[:, i, j].clone()*(1.-(1./12)*increment_XY.clone()**2)
