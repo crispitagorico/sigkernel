@@ -2,15 +2,42 @@ import numpy as np
 import torch
 from sigKer_fast import sig_kernel_batch
 
+
+
 class SigLoss(torch.nn.Module):
 
-    def __init__(self, n=0):
+    def __init__(self, n=0, n_chunks=2):
         super(SigLoss, self).__init__()
         self.n = n
+        self.n_chunks = n_chunks
+
+    def sig_distance(self,x,y):
+        d = torch.mean(torch.sqrt(SigKernel.apply(x,None,self.n) + SigKernel.apply(y,None,self.n) - 2.*SigKernel.apply(x,y,self.n))) 
+        return d #+ torch.mean(torch.abs(x[:,0,:]-y[:,0,:])) + torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):
-        dist = SigKernel.apply(X,None,self.n) + SigKernel.apply(Y,None,self.n) - 2.*SigKernel.apply(X,Y,self.n)
-        return torch.mean(dist)
+
+        if self.n_chunks==1:
+            return self.sig_distance(X,Y)
+
+        dist = torch.tensor(0., dtype=torch.float64)
+        for k in range(2, self.n_chunks+1):
+            X_chunks = torch.chunk(X, k, dim=1)
+            Y_chunks = torch.chunk(Y, k, dim=1)
+            for x1,x2,y1,y2 in zip(X_chunks[:-1], X_chunks[1:], Y_chunks[:-1], Y_chunks[1:]):
+                dist += self.sig_distance(torch.cat([x1,x2],dim=1),torch.cat([y1,y2],dim=1))
+
+        return dist
+
+#class SigLoss(torch.nn.Module):
+
+#    def __init__(self, n=0):
+#        super(SigLoss, self).__init__()
+#        self.n = n
+
+#    def forward(self, X, Y):
+#        dist = SigKernel.apply(X,None,self.n) + SigKernel.apply(Y,None,self.n) - 2.*SigKernel.apply(X,Y,self.n)
+#        return torch.mean(torch.sqrt(dist)) + torch.mean(torch.abs(X[:,0,:] - Y[:,0,:])) + torch.mean(torch.abs(X[:,-1,:] - Y[:,-1,:]))
 
 
 class SigKernel(torch.autograd.Function):
@@ -43,11 +70,11 @@ class SigKernel(torch.autograd.Function):
 
         # 1. FORWARD
         if XX or XY:
-            K, K_rev = sig_kernel_batch(X.detach().numpy(),Y.detach().numpy(),n,gradients=True) 
-            K_rev = torch.tensor(K_rev, dtype=torch.double)
+            K, K_rev = sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n,gradients=True) 
+            K_rev = torch.tensor(K_rev, dtype=torch.double).to(X.device)
         else:
-            K =  sig_kernel_batch(X.detach().numpy(),Y.detach().numpy(),n,gradients=False) 
-        K = torch.tensor(K, dtype=torch.double)
+            K =  sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n,gradients=False) 
+        K = torch.tensor(K, dtype=torch.double).to(X.device)
 
         # 2. GRADIENTS
         if XX or XY: # no need to compute this 
@@ -87,7 +114,7 @@ class SigKernel(torch.autograd.Function):
             grad_incr, = ctx.saved_tensors
             A = grad_incr.shape[0]
             D = grad_incr.shape[2]
-            grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64), grad_incr], dim=1)
+            grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device), grad_incr], dim=1)
 
         if XX:
             # remark1: grad_points=\sum_a dKa/dX, whilst dL/dX = \sum_a grad_output[a]*dKa/dX
@@ -106,13 +133,38 @@ class SigKernel(torch.autograd.Function):
 
 class SigLoss_naive(torch.nn.Module):
 
-    def __init__(self, n=0):
+    def __init__(self, n=0, n_chunks=2):
         super(SigLoss_naive, self).__init__()
         self.n = n
+        self.n_chunks = n_chunks
+
+    def sig_distance(self,x,y):
+        d = torch.mean(torch.sqrt(SigKernel_naive(x,x,self.n) + SigKernel_naive(y,y,self.n) - 2.*SigKernel_naive(x,y,self.n))) 
+        return d #+ torch.mean(torch.abs(x[:,0,:]-y[:,0,:])) + torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):
-        d = SigKernel_naive(X,X,self.n) + SigKernel_naive(Y,Y,self.n) - 2.*SigKernel_naive(X,Y,self.n)
-        return torch.mean(d)
+
+        if self.n_chunks==1:
+            return self.sig_distance(X,Y)
+
+        dist = torch.tensor(0., dtype=torch.float64)
+        for k in range(2, self.n_chunks):
+            X_chunks = torch.chunk(X, k, dim=1)
+            Y_chunks = torch.chunk(Y, k, dim=1)
+            for x1,x2,y1,y2 in zip(X_chunks[:-1], X_chunks[1:], Y_chunks[:-1], Y_chunks[1:]):
+                dist += self.sig_distance(torch.cat([x1,x2],dim=1),torch.cat([y1,y2],dim=1))
+
+        return dist
+
+#class SigLoss_naive(torch.nn.Module):
+
+#    def __init__(self, n=0):
+#        super(SigLoss_naive, self).__init__()
+#        self.n = n
+
+#    def forward(self, X, Y):
+#        d = SigKernel_naive(X,X,self.n) + SigKernel_naive(Y,Y,self.n) - 2.*SigKernel_naive(X,Y,self.n)
+#        return torch.mean(d)
 
 
 def SigKernel_naive(X,Y,n=0):
@@ -157,7 +209,7 @@ def tile(a, dim, n_tile):
     repeat_idx = [1] * a.dim()
     repeat_idx[dim] = n_tile
     a = a.repeat(*(repeat_idx))
-    order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]))
+    order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(a.device)
     return torch.index_select(a, dim, order_index)
 
 
