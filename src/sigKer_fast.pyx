@@ -3,6 +3,9 @@
 
 import numpy as np
 
+def forward_step(double k_00, double k_01, double k_10, double increment):
+	return k_10 + k_01 + k_00*(increment-1.)
+
 def forward_step_explicit(double k_00, double k_01, double k_10, double increment):
 	return (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
 
@@ -16,7 +19,7 @@ def forward_step_implicit_gradient(double k_00, double k_01, double k_10, double
 	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10) + 0.25*increment_*(k_00_ + k_01_ + k_10_ + k_11_)
 
 
-def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint implicit=True):
+def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint implicit=False):
 
 	cdef int M = x.shape[0]
 	cdef int N = y.shape[0]
@@ -51,7 +54,7 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint impl
 			if implicit:
 				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)
 			else:
-				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
+				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
 
 	if full:
 		return np.array(K)
@@ -141,7 +144,7 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 	return np.array(K[:,:,MM,NN])
 
 
-def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=True, bint gradients=True):
+def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=False, bint gradients=True):
 
 	cdef int A = x.shape[0]
 	cdef int M = x.shape[1]
@@ -186,8 +189,8 @@ def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=Tr
 						K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 						K_rev[l,i+1,j+1] = forward_step_implicit(K_rev[l,i,j], K_rev[l,i,j+1], K_rev[l,i+1,j], increment_rev)
 					else:
-						K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
-						K_rev[l,i+1,j+1] = forward_step_explicit(K_rev[l,i,j], K_rev[l,i,j+1], K_rev[l,i+1,j], increment_rev)
+						K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+						K_rev[l,i+1,j+1] = forward_step(K_rev[l,i,j], K_rev[l,i,j+1], K_rev[l,i+1,j], increment_rev)
 	
 	else:
 
@@ -212,7 +215,7 @@ def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=Tr
 					if implicit:
 						K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 					else:
-						K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+						K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 
 	if gradients:
 		return np.array(K), np.array(K_rev)
