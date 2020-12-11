@@ -3622,7 +3622,7 @@ static PyObject *__pyx_pf_11sigKer_fast_12sig_kernel(CYTHON_UNUSED PyObject *__p
  * 			if implicit:
  * 				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)             # <<<<<<<<<<<<<<
  * 			else:
- * 				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
+ * 				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
  */
         __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_forward_step_implicit); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 58, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
@@ -3718,12 +3718,16 @@ static PyObject *__pyx_pf_11sigKer_fast_12sig_kernel(CYTHON_UNUSED PyObject *__p
       /* "sigKer_fast.pyx":60
  * 				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)
  * 			else:
- * 				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)             # <<<<<<<<<<<<<<
+ * 				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)             # <<<<<<<<<<<<<<
  * 
  * 	if full:
  */
       /*else*/ {
+<<<<<<< HEAD
         __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_forward_step); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 60, __pyx_L1_error)
+=======
+        __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_n_s_forward_step_explicit); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 57, __pyx_L1_error)
+>>>>>>> ab1cd43782357f761c59ffce64c1f24bbc7f204c
         __Pyx_GOTREF(__pyx_t_4);
         __pyx_t_27 = __pyx_v_i;
         __pyx_t_26 = __pyx_v_j;
@@ -3808,8 +3812,13 @@ static PyObject *__pyx_pf_11sigKer_fast_12sig_kernel(CYTHON_UNUSED PyObject *__p
     }
   }
 
+<<<<<<< HEAD
   /* "sigKer_fast.pyx":62
  * 				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
+=======
+  /* "sigKer_fast.pyx":59
+ * 				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
+>>>>>>> ab1cd43782357f761c59ffce64c1f24bbc7f204c
  * 
  * 	if full:             # <<<<<<<<<<<<<<
  * 		return np.array(K)
@@ -3853,8 +3862,13 @@ static PyObject *__pyx_pf_11sigKer_fast_12sig_kernel(CYTHON_UNUSED PyObject *__p
     __pyx_t_5 = 0;
     goto __pyx_L0;
 
+<<<<<<< HEAD
     /* "sigKer_fast.pyx":62
  * 				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
+=======
+    /* "sigKer_fast.pyx":59
+ * 				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
+>>>>>>> ab1cd43782357f761c59ffce64c1f24bbc7f204c
  * 
  * 	if full:             # <<<<<<<<<<<<<<
  * 		return np.array(K)
