@@ -245,15 +245,9 @@ def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=T
 			
 			for i in range(MM+1):
 				K[l,i,0] = 1.
-				for m in range(M-1):
-					for d in range(D):
-						K_rev[l,m,d,i,0] = 1.
 	
 			for j in range(NN+1):
 				K[l,0,j] = 1.
-				for m in range(M-1):
-					for d in range(D):
-						K_rev[l,m,d,0,j] = 1.
 
 			for i in range(MM):
 				for j in range(NN):

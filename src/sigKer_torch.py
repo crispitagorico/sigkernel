@@ -104,9 +104,7 @@ class SigKernel(torch.autograd.Function):
                 ctx.save_for_backward(K_rev[:,:,:,-1,-1])
         
         ctx.XX, ctx.YY, ctx.XY = XX, YY, XY
-        ctx.method = method
-        if method == 'new':
-            ctx.K = K[:,-1,-1]
+
         return K[:,-1,-1]
 
     @staticmethod
@@ -118,7 +116,6 @@ class SigKernel(torch.autograd.Function):
         """
 
         XX, YY, XY = ctx.XX, ctx.YY, ctx.XY
-        method = ctx.method 
      
         if XX or XY:
             grad_incr , = ctx.saved_tensors
@@ -126,9 +123,7 @@ class SigKernel(torch.autograd.Function):
             A = grad_incr.shape[0]
             D = grad_incr.shape[2]
             grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device), grad_incr], dim=1)
-            if method == 'new':
-                grad_points[:,0,:]+=ctx.K
-                grad_points[:,-1,:]-=ctx.K
+
         if XX:
             # remark1: grad_points=\sum_a dKa/dX, whilst dL/dX = \sum_a grad_output[a]*dKa/dX
             # where dKa/dX is a tensor of shape (A,M,N) with zeros everywhere except for Ka[a,:,:].
