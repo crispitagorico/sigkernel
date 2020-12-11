@@ -74,10 +74,14 @@ class SigKernel(torch.autograd.Function):
             if method=='variation_parameters':
                 K, K_rev = sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=True) 
             else:
-                K, K_rev = sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=True) 
+                K, K_rev = sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=True)
+
             K_rev = torch.tensor(K_rev, dtype=torch.double).to(X.device)
         else:
-            K =  sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=False) 
+            if method=='variation_parameters':
+                K =  sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=False)
+            else:
+                K =  sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=False)
         K = torch.tensor(K, dtype=torch.double).to(X.device)
 
         # 2. GRADIENTS
