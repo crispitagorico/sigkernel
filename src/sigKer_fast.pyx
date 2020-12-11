@@ -222,7 +222,7 @@ def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=Fa
 	return np.array(K)
 
 
-def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=True, bint gradients=True):
+def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=False, bint gradients=True):
 
 	cdef int A = x.shape[0]
 	cdef int M = x.shape[1]
