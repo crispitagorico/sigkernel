@@ -12,6 +12,9 @@ def forward_step_explicit(double k_00, double k_01, double k_10, double incremen
 def forward_step_implicit(double k_00, double k_01, double k_10, double increment):
 	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10)
 
+def forward_step_gradient(double k_00, double k_01, double k_10, double increment, double k_00_, double k_01_, double k_10_, double k_11_, double increment_):
+	return k_10 + k_01 + k_00*(increment-1.) + 0.25*increment_*(k_00_ + k_01_ + k_10_ + k_11_)
+
 def forward_step_explicit_gradient(double k_00, double k_01, double k_10, double increment, double k_00_, double k_01_, double k_10_, double k_11_, double increment_):
 	return (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2) + 0.25*increment_*(k_00_ + k_01_ + k_10_ + k_11_)
 
@@ -144,7 +147,7 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 	return np.array(K[:,:,MM,NN])
 
 
-def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=False, bint gradients=True):
+def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint gradients=True):
 
 	cdef int A = x.shape[0]
 	cdef int M = x.shape[1]
@@ -185,13 +188,16 @@ def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=Fa
 						increment += (x[l,ii+1,k]-x[l,ii,k])*(y[l,jj+1,k]-y[l,jj,k])/factor
 						increment_rev += (x[l,(M-1)-(ii+1),k]-x[l,(M-1)-ii,k])*(y[l,(N-1)-(jj+1),k]-y[l,(N-1)-jj,k])/factor
 
-					if implicit:
+					if solver==2:
 						K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 						K_rev[l,i+1,j+1] = forward_step_implicit(K_rev[l,i,j], K_rev[l,i,j+1], K_rev[l,i+1,j], increment_rev)
-					else:
+					elif solver==1:
+						K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+						K_rev[l,i+1,j+1] = forward_step_explicit(K_rev[l,i,j], K_rev[l,i,j+1], K_rev[l,i+1,j], increment_rev)
+					elif solver==0:
 						K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 						K_rev[l,i+1,j+1] = forward_step(K_rev[l,i,j], K_rev[l,i,j+1], K_rev[l,i+1,j], increment_rev)
-	
+
 	else:
 
 		for l in range(A):
@@ -212,17 +218,20 @@ def sig_kernel_batch(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=Fa
 					for k in range(D):
 						increment += (x[l,ii+1,k]-x[l,ii,k])*(y[l,jj+1,k]-y[l,jj,k])/factor
 
-					if implicit:
+					if solver==2:
 						K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
-					else:
+					elif solver==1:
+						K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+					elif solver==0:
 						K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+
 
 	if gradients:
 		return np.array(K), np.array(K_rev)
 	return np.array(K)
 
 
-def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=False, bint gradients=True):
+def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint gradients=True):
 
 	cdef int A = x.shape[0]
 	cdef int M = x.shape[1]
@@ -260,7 +269,7 @@ def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=F
 					for k in range(D):
 						increment += (x[l,ii+1,k]-x[l,ii,k])*(y[l,jj+1,k]-y[l,jj,k])/factor
 
-					if implicit:
+					if solver==2:
 						K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 						for m in range(M-1):
 							for d in range(D):
@@ -269,7 +278,7 @@ def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=F
 								else:
 									inc_Y = 0.
 								K_rev[l,m,d,i+1,j+1] = forward_step_implicit_gradient(K_rev[l,m,d,i,j], K_rev[l,m,d,i,j+1], K_rev[l,m,d,i+1,j], increment, K[l,i,j], K[l,i+1,j], K[l,i,j+1], K[l,i+1,j+1], inc_Y)
-					else:
+					elif solver==1:
 						K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 						for m in range(M-1):
 							for d in range(D):
@@ -278,8 +287,17 @@ def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=F
 								else:
 									inc_Y = 0.
 								K_rev[l,m,d,i+1,j+1] = forward_step_explicit_gradient(K_rev[l,m,d,i,j], K_rev[l,m,d,i,j+1], K_rev[l,m,d,i+1,j], increment, K[l,i,j], K[l,i+1,j], K[l,i,j+1], K[l,i+1,j+1], inc_Y)
-	
-	else:
+					elif solver==0:
+						K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+						for m in range(M-1):
+							for d in range(D):
+								if m==ii:
+									inc_Y = (y[l,jj+1,d]-y[l,jj,d])/factor
+								else:
+									inc_Y = 0.
+								K_rev[l,m,d,i+1,j+1] = forward_step_gradient(K_rev[l,m,d,i,j], K_rev[l,m,d,i,j+1], K_rev[l,m,d,i+1,j], increment, K[l,i,j], K[l,i+1,j], K[l,i,j+1], K[l,i+1,j+1], inc_Y)
+		
+	else:	
 
 		for l in range(A):
 			
@@ -299,10 +317,12 @@ def sig_kernel_batch_(double[:,:,:] x, double[:,:,:] y, int n=0, bint implicit=F
 					for k in range(D):
 						increment += (x[l,ii+1,k]-x[l,ii,k])*(y[l,jj+1,k]-y[l,jj,k])/factor
 
-					if implicit:
+					if solver==2:
 						K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
-					else:
+					elif solver==1:
 						K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+					elif solver==0:
+						K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 
 	if gradients:
 		return np.array(K), np.array(K_rev)

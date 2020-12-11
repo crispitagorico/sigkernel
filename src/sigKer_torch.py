@@ -6,17 +6,20 @@ from sigKer_fast import sig_kernel_batch, sig_kernel_batch_
 
 class SigLoss(torch.nn.Module):
 
-    def __init__(self, n=0, n_chunks=2,method='variation_parameters'):
+    def __init__(self, n=0, n_chunks=2,solver=0,method='variation_parameters'):
         super(SigLoss, self).__init__()
         self.n = n
         self.n_chunks = n_chunks
+        self.solver = solver
         self.method=method
-
+        
     def sig_distance(self,x,y):
-        d = torch.mean(SigKernel.apply(x,None,self.n,self.method) + SigKernel.apply(y,None,self.n,self.method)- 2.*SigKernel.apply(x,y,self.n,self.method) )
+        d = torch.mean(SigKernel.apply(x,None,self.n,self.solver,self.method) + SigKernel.apply(y,None,self.n,self.solver,self.method)- 2.*SigKernel.apply(x,y,self.n,self.solver,self.method) )
         return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):
+        
+        assert X.requires_grad and not Y.requires_grad, "the first input should require grad, and not the second"
 
         if self.n_chunks==1:
             return self.sig_distance(X,Y)
@@ -44,7 +47,7 @@ class SigLoss(torch.nn.Module):
 class SigKernel(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, X, Y=None, n=0,method='variation_parameters'):
+    def forward(ctx, X, Y=None, n=0,solver=0,method='variation_parameters'):
         """
         input
          - X a list of A paths each of shape (M,D)
@@ -54,6 +57,7 @@ class SigKernel(torch.autograd.Function):
          -  K_XY: a vector of A pairwise kernel evaluations k(x_i,y_i)      (forward)
          -  K_dXY: A matrices ( dk_{x_{pq}}(x_i,y_i) )_{p=1,q=1}^{p=M,q=D}  (backward)
         """
+
         XX, YY, XY = False, False, False
 
         if Y is None:
@@ -72,16 +76,16 @@ class SigKernel(torch.autograd.Function):
         # 1. FORWARD
         if XX or XY:
             if method=='variation_parameters':
-                K, K_rev = sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=True) 
+                K, K_rev = sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=True) 
             else:
-                K, K_rev = sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=True)
+                K, K_rev = sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=True)
 
             K_rev = torch.tensor(K_rev, dtype=torch.double).to(X.device)
         else:
             if method=='variation_parameters':
-                K =  sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=False)
+                K =  sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=False)
             else:
-                K =  sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,gradients=False)
+                K =  sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=False)
         K = torch.tensor(K, dtype=torch.double).to(X.device)
 
         # 2. GRADIENTS
@@ -133,12 +137,13 @@ class SigKernel(torch.autograd.Function):
             # where dKa/dX is a tensor of shape (A,M,N) with zeros everywhere except for Ka[a,:,:].
             # we need to 'inject grad_output' in grad_points, it corresponds to do grad_output[a]*grad_points[a,:,:]
             # remark2: KXX is bilinear, and grad_points is the gradient with respect to the left variable -> we need to multiply by 2
-            return 2.*grad_output[:,None,None]*grad_points, None, None, None 
+            return 2.*grad_output[:,None,None]*grad_points, None, None, None, None
         if YY:
-            return None, None, None, None
+            # should never go here
+            return None, None, None, None, None
         if XY:
             # see remark 1
-            return grad_output[:,None,None]*grad_points, None, None, None
+            return grad_output[:,None,None]*grad_points, None, None, None, None
 
 
 # Naive implementation with pytorch auto-diff (slow)
