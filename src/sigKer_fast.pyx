@@ -54,7 +54,7 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint impl
 			if implicit:
 				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)
 			else:
-				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
+				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
 
 	if full:
 		return np.array(K)
