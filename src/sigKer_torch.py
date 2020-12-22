@@ -14,11 +14,11 @@ class SigLoss(torch.nn.Module):
         self.method=method
         
     def sig_distance(self,x,y):
-        d = torch.mean(SigKernel.apply(x,None,self.n,self.solver,self.method) + SigKernel.apply(y,None,self.n,self.solver,self.method)- 2.*SigKernel.apply(x,y,self.n,self.solver,self.method) )
+        d = torch.mean(SigKernel.apply(x,None,self.n,self.solver,self.method)+ SigKernel.apply(y,None,self.n,self.solver,self.method)- 2.*SigKernel.apply(x,y,self.n,self.solver,self.method) )
         return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):
-        
+
         assert X.requires_grad and not Y.requires_grad, "the first input should require grad, and not the second"
 
         if self.n_chunks==1:
