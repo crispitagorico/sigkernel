@@ -22,7 +22,7 @@ def forward_step_implicit_gradient(double k_00, double k_01, double k_10, double
 	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10) + 0.25*increment_*(k_00_ + k_01_ + k_10_ + k_11_)
 
 
-def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint implicit=False):
+def sig_kernel(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint full=False):
 
 	cdef int M = x.shape[0]
 	cdef int N = y.shape[0]
@@ -54,10 +54,12 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint impl
 			for k in range(D):
 				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor 
 
-			if implicit:
-				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)
-			else:
+			if solver==0:
+				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
+			elif solver==1:
 				K[i+1,j+1] = forward_step_explicit(K[i,j], K[i,j+1], K[i+1,j], increment)
+			else:
+				K[i+1,j+1] = forward_step_implicit(K[i,j], K[i,j+1], K[i+1,j], increment)
 
 	if full:
 		return np.array(K)
@@ -65,10 +67,10 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0, bint full=False, bint impl
 		return K[MM,NN]
 
 
-def sig_distance(double[:,:] x, double[:,:] y, int n=0):
-	cdef double a = sig_kernel(x,x,n)
-	cdef double b = sig_kernel(y,y,n)
-	cdef double c = sig_kernel(x,y,n)
+def sig_distance(double[:,:] x, double[:,:] y, int n=0, int solver=0):
+	cdef double a = sig_kernel(x,x,n,solver)
+	cdef double b = sig_kernel(y,y,n,solver)
+	cdef double c = sig_kernel(x,y,n,solver)
 	return a + b - 2.*c
 
 
