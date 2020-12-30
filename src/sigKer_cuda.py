@@ -8,52 +8,7 @@ import math
 
 # ----------------------------------------------------------------------------------------------------------------------
 @cuda.jit
-def compute_softdtw_cuda(D, gamma, bandwidth, max_i, max_j, n_passes, R):
-    """
-    :param seq_len: The length of the sequence (both inputs are assumed to be of the same size)
-    :param n_passes: 2 * seq_len - 1 (The number of anti-diagonals)
-    """
-    # Each block processes one pair of examples
-    b = cuda.blockIdx.x
-    # We have as many threads as seq_len, because the most number of threads we need
-    # is equal to the number of elements on the largest anti-diagonal
-    tid = cuda.threadIdx.x
-
-    # Compute I, J, the indices from [0, seq_len)
-
-    # The row index is always the same as tid
-    I = tid
-
-    inv_gamma = 1.0 / gamma
-
-    # Go over each anti-diagonal. Only process threads that fall on the current on the anti-diagonal
-    for p in range(n_passes):
-
-        # The index is actually 'p - tid' but need to force it in-bounds
-        J = max(0, min(p - tid, max_j - 1))
-
-        # For simplicity, we define i, j which start from 1 (offset from I, J)
-        i = I + 1
-        j = J + 1
-
-        # Only compute if element[i, j] is on the current anti-diagonal, and also is within bounds
-        if I + J == p and (I < max_i and J < max_j):
-            # Don't compute if outside bandwidth
-            if not (abs(i - j) > bandwidth > 0):
-                r0 = -R[b, i - 1, j - 1] * inv_gamma
-                r1 = -R[b, i - 1, j] * inv_gamma
-                r2 = -R[b, i, j - 1] * inv_gamma
-                rmax = max(max(r0, r1), r2)
-                rsum = math.exp(r0 - rmax) + math.exp(r1 - rmax) + math.exp(r2 - rmax)
-                softmin = -gamma * (math.log(rsum) + rmax)
-                R[b, i, j] = D[b, i - 1, j - 1] + softmin
-
-        # Wait for other threads in this block
-        cuda.syncthreads()
-
-
-@cuda.jit
-def compute_sigKernel_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol):
+def compute_sigKernel_forward_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol):
     """
     We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
     M_inc: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
@@ -94,101 +49,176 @@ def compute_sigKernel_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol):
 
 # ----------------------------------------------------------------------------------------------------------------------
 @cuda.jit
-def compute_softdtw_backward_cuda(D, R, inv_gamma, bandwidth, max_i, max_j, n_passes, E):
-    k = cuda.blockIdx.x
-    tid = cuda.threadIdx.x
+def compute_sigKernel_backward_cuda(M_inc_rev, len_x, len_y, n_anti_diagonals, M_sol):
+    """
+    We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
+    M_inc_rev: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
+    n_anti_diagonals = 2 * max(len_x, len_y) - 1
+    M_sol: a 3-tensor storing the solutions of the PDEs.
+    """
 
-    # Indexing logic is the same as above, however, the anti-diagonal needs to
-    # progress backwards
-    I = tid
+    # Each block corresponds to a pair (x_i,y_i).
+    block_id = cuda.blockIdx.x
+    # Each thread works on a node of a diagonal.
+    thread_id = cuda.threadIdx.x
 
-    for p in range(n_passes):
-        # Reverse the order to make the loop go backward
-        rev_p = n_passes - p - 1
+    I = thread_id
 
-        # convert tid to I, J, then i, j
-        J = max(0, min(rev_p - tid, max_j - 1))
+    # Go over each anti-diagonal. Only process threads that fall on the current on the anti-diagonal
+    for p in range(n_anti_diagonals):
 
-        i = I + 1
-        j = J + 1
+        # The index is actually 'p - thread_id' but need to force it in-bounds
+        J = max(0, min(p - thread_id, len_y - 1))
 
-        # Only compute if element[i, j] is on the current anti-diagonal, and also is within bounds
-        if I + J == rev_p and (I < max_i and J < max_j):
+        # For simplicity, we define i, j which start from 1 (offset from I, J)
+        i = len_x - I
+        j = len_y - J
 
-            if math.isinf(R[k, i, j]):
-                R[k, i, j] = -math.inf
+        # Only compute if element[i, j] is on the current anti-diagonal
+        if I + J == p and (I < len_x and J < len_y):
 
-            # Don't compute if outside bandwidth
-            if not (abs(i - j) > bandwidth > 0):
-                a = math.exp((R[k, i + 1, j] - R[k, i, j] - D[k, i + 1, j]) * inv_gamma)
-                b = math.exp((R[k, i, j + 1] - R[k, i, j] - D[k, i, j + 1]) * inv_gamma)
-                c = math.exp((R[k, i + 1, j + 1] - R[k, i, j] - D[k, i + 1, j + 1]) * inv_gamma)
-                E[k, i, j] = E[k, i + 1, j] * a + E[k, i, j + 1] * b + E[k, i + 1, j + 1] * c
+            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc[block_id, i-1, j-1]-1.)
 
         # Wait for other threads in this block
         cuda.syncthreads()
-
-# We don't need a different backward function for the kernel (see variation of parameters)!!
 # ----------------------------------------------------------------------------------------------------------------------
 
-class _SoftDTWCUDA(Function):
-    """
-    CUDA implementation is inspired by the diagonal one proposed in https://ieeexplore.ieee.org/document/8400444:
-    "Developing a pattern discovery method in time series data and its GPU acceleration"
-    """
+class SigKernel(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, D, gamma, bandwidth):
-        dev = D.device
-        dtype = D.dtype
-        gamma = torch.cuda.FloatTensor([gamma])
-        bandwidth = torch.cuda.FloatTensor([bandwidth])
+    def forward(ctx, X, Y=None):
+        """
+        input
+         - X : 3-tensor of shape (N, len, dim)
+         - Y : 3-tensor of shape (N, len, dim)
+        """
 
-        B = D.shape[0]
-        N = D.shape[1]
-        M = D.shape[2]
-        threads_per_block = max(N, M)
-        n_passes = 2 * threads_per_block - 1
+        XX, YY, XY = False, False, False
 
-        # Prepare the output array
-        R = torch.ones((B, N + 2, M + 2), device=dev, dtype=dtype) * math.inf
-        R[:, 0, 0] = 0
+        if Y is None:
+            Y = X.detach().clone() 
+            if X.requires_grad:
+                XX = True
+            else:
+                YY = True
+        else:
+            XY = True
 
-        # Run the CUDA kernel.
+        A = X.shape[0]
+        M = X.shape[1]
+        D = X.shape[2]
+
+        # Compute increment matrix
+        M_inc = torch.bmm(X[:,1:,:]-X[:,:-1,:], (Y[:,1:,:]-Y[:,:-1,:]).permute(0,2,1))
+
+        dev = M_inc.device
+        dtype = M_inc.dtype
+
+        threads_per_block = M
+        n_anti_diagonals = 2 * threads_per_block - 1
+
+        # Prepare the tensor of output solutions to the PDE (forward)
+        K = torch.zeros((A, M+1, M+1), device=dev, dtype=dtype) 
+        K[:,0,:] = 1.
+        K[:,:,0] = 1. 
+
+        # Run the CUDA kernel to compute the forward signature kernel.
         # Set CUDA's grid size to be equal to the batch size (every CUDA block processes one sample pair)
         # Set the CUDA block size to be equal to the length of the longer sequence (equal to the size of the largest diagonal)
-        compute_softdtw_cuda[B, threads_per_block](cuda.as_cuda_array(D.detach()),
-                                                   gamma.item(), bandwidth.item(), N, M, n_passes,
-                                                   cuda.as_cuda_array(R))
-        ctx.save_for_backward(D, R, gamma, bandwidth)
-        return R[:, -2, -2]
+        compute_sigKernel_forward_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc.detach()), 
+                                                                M, M, n_anti_diagonals,
+                                                                cuda.as_cuda_array(K))
+
+        K = K[:,:-1,:-1]
+
+        # 1. FORWARD
+        if XX or XY:
+            
+            # Compute reversed increment matrix
+            X_rev = X[:,::-1,:]
+            Y_rev = Y[:,::-1,:]
+            M_inc_rev = torch.bmm(X_rev[:,1:,:]-X_rev[:,:-1,:], 
+                                  (Y_rev[:,1:,:]-Y_rev[:,:-1,:]).permute(0,2,1))
+
+            # Prepare the tensor of output solutions to the PDE (forward)
+            K_rev = torch.zeros((A, M+1, M+1), device=dev, dtype=dtype) 
+            K_rev[:,-1,:] = 1.
+            K_rev[:,:,-1] = 1. 
+
+            # Compute signature kernel for reversed paths
+            compute_sigKernel_backward_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
+                                                                 M, M, n_anti_diagonals,
+                                                                 cuda.as_cuda_array(K_rev))
+
+            K_rev = K_rev[:,1:,1:]
+
+        # 2. GRADIENTS
+        if XX or XY: 
+            inc_Y = Y[:,1:,:]-Y[:,:-1,:]                 # (A,M-1,D)  increments defined by the data   
+            KK = (K[:,:-1,:-1] * K_rev[:,1:,1:])         # (A,(2**n)*(M-1),(2**n)*(N-1))
+            K_grad = KK[:,:,:,None]*inc_Y[:,None,:,:]    # (A,(2**n)*(M-1),(2**n)*(N-1),D)
+            K_grad = torch.sum(K_grad,axis=2)            # (A,(2**n)*(M-1),D)
+            ctx.save_for_backward(K_grad)
+        
+        ctx.XX, ctx.YY, ctx.XY = XX, YY, XY
+
+        return K[:,-1,-1]
 
     @staticmethod
     def backward(ctx, grad_output):
-        dev = grad_output.device
-        dtype = grad_output.dtype
-        D, R, gamma, bandwidth = ctx.saved_tensors
 
-        B = D.shape[0]
-        N = D.shape[1]
-        M = D.shape[2]
-        threads_per_block = max(N, M)
-        n_passes = 2 * threads_per_block - 1
+        """
+        During the forward pass, the gradients with respect to each increment in each dimension has been computed.
+        Here we derive the gradients with respect to the points of the time series.
+        """
 
-        D_ = torch.zeros((B, N + 2, M + 2), dtype=dtype, device=dev)
-        D_[:, 1:N + 1, 1:M + 1] = D
+        XX, YY, XY = ctx.XX, ctx.YY, ctx.XY
+     
+        if XX or XY:
+            grad_incr , = ctx.saved_tensors
 
-        R[:, :, -1] = -math.inf
-        R[:, -1, :] = -math.inf
-        R[:, -1, -1] = R[:, -2, -2]
+            A = grad_incr.shape[0]
+            D = grad_incr.shape[2]
+            grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device), grad_incr], dim=1)
 
-        E = torch.zeros((B, N + 2, M + 2), dtype=dtype, device=dev)
-        E[:, -1, -1] = 1
+        if XX:
+            # remark1: grad_points=\sum_a dKa/dX, whilst dL/dX = \sum_a grad_output[a]*dKa/dX
+            # where dKa/dX is a tensor of shape (A,M,N) with zeros everywhere except for Ka[a,:,:].
+            # we need to 'inject grad_output' in grad_points, it corresponds to do grad_output[a]*grad_points[a,:,:]
+            # remark2: KXX is bilinear, and grad_points is the gradient with respect to the left variable -> we need to multiply by 2
+            return 2.*grad_output[:,None,None]*grad_points, None
+        if YY:
+            # should never go here
+            return None, None
+        if XY:
+            # see remark 1
+            return grad_output[:,None,None]*grad_points, None
 
-        # Grid and block sizes are set same as done above for the forward() call
-        compute_softdtw_backward_cuda[B, threads_per_block](cuda.as_cuda_array(D_),
-                                                            cuda.as_cuda_array(R),
-                                                            1.0 / gamma.item(), bandwidth.item(), N, M, n_passes,
-                                                            cuda.as_cuda_array(E))
-        E = E[:, 1:N + 1, 1:M + 1]
-        return grad_output.view(-1, 1, 1).expand_as(E) * E, None, None
+
+
+
+class SigLoss(torch.nn.Module):
+
+    def __init__(self, n_chunks=2):
+        super(SigLoss, self).__init__()
+        self.n_chunks = n_chunks
+        
+    def sig_distance(self,x,y):
+        d = torch.mean( SigKernel.apply(x,None)+ SigKernel.apply(y,None)- 2.*SigKernel.apply(x,y) )
+        return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
+
+    def forward(self, X, Y):
+
+        assert X.requires_grad and not Y.requires_grad, "the first input should require grad, and not the second"
+
+        if self.n_chunks==1:
+            return self.sig_distance(X,Y)
+
+        dist = torch.tensor(0., dtype=torch.float64)
+        for k in range(2, self.n_chunks+1):
+            X_chunks = torch.chunk(X, k, dim=1)
+            Y_chunks = torch.chunk(Y, k, dim=1)
+            for x1,x2,y1,y2 in zip(X_chunks[:-1], X_chunks[1:], Y_chunks[:-1], Y_chunks[1:]):
+                dist += self.sig_distance(torch.cat([x1,x2],dim=1),torch.cat([y1,y2],dim=1))
+
+        return dist
