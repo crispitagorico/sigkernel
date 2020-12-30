@@ -150,7 +150,7 @@ class SigKernel(torch.autograd.Function):
 
 class SigLoss_naive(torch.nn.Module):
 
-    def __init__(self, n=0, n_chunks=2,method='explicit'):
+    def __init__(self, n=0, n_chunks=2, method='explicit'):
         super(SigLoss_naive, self).__init__()
         self.n = n
         self.n_chunks = n_chunks
