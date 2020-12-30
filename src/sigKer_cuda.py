@@ -48,40 +48,6 @@ def compute_sigKernel_forward_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol)
 #	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10)
 
 # ----------------------------------------------------------------------------------------------------------------------
-@cuda.jit
-def compute_sigKernel_backward_cuda(M_inc_rev, len_x, len_y, n_anti_diagonals, M_sol):
-    """
-    We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
-    M_inc_rev: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
-    n_anti_diagonals = 2 * max(len_x, len_y) - 1
-    M_sol: a 3-tensor storing the solutions of the PDEs.
-    """
-
-    # Each block corresponds to a pair (x_i,y_i).
-    block_id = cuda.blockIdx.x
-    # Each thread works on a node of a diagonal.
-    thread_id = cuda.threadIdx.x
-
-    I = thread_id
-
-    # Go over each anti-diagonal. Only process threads that fall on the current on the anti-diagonal
-    for p in range(n_anti_diagonals):
-
-        # The index is actually 'p - thread_id' but need to force it in-bounds
-        J = max(0, min(p - thread_id, len_y - 1))
-
-        # For simplicity, we define i, j which start from 1 (offset from I, J)
-        i = len_x - I
-        j = len_y - J
-
-        # Only compute if element[i, j] is on the current anti-diagonal
-        if I + J == p and (I < len_x and J < len_y):
-
-            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc_rev[block_id, I, J]-1.)
-
-        # Wait for other threads in this block
-        cuda.syncthreads()
-# ----------------------------------------------------------------------------------------------------------------------
 
 class SigKernel(torch.autograd.Function):
 
@@ -173,8 +139,6 @@ class SigKernel(torch.autograd.Function):
         grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(grad_incr.dtype).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(grad_incr.dtype).to(grad_incr.device), grad_incr], dim=1)
 
         return grad_output[:,None,None]*grad_points, None
-
-
 
 
 class SigLoss(torch.nn.Module):
