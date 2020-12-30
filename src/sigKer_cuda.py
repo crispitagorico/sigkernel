@@ -77,7 +77,7 @@ def compute_sigKernel_backward_cuda(M_inc_rev, len_x, len_y, n_anti_diagonals, M
         # Only compute if element[i, j] is on the current anti-diagonal
         if I + J == p and (I < len_x and J < len_y):
 
-            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc_rev[block_id, i-1, j-1]-1.)
+            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc_rev[block_id, I, J]-1.)
 
         # Wait for other threads in this block
         cuda.syncthreads()
