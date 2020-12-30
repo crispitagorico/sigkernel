@@ -135,8 +135,8 @@ class SigKernel(torch.autograd.Function):
         if XX or XY:
             
             # Compute reversed increment matrix
-            X_rev = X.detach()[:,::-1,:]
-            Y_rev = Y.detach()[:,::-1,:]
+            X_rev = torch.flip(X, dims=[1])
+            Y_rev = torch.flip(Y, dims=[1])
             M_inc_rev = torch.bmm(X_rev[:,1:,:]-X_rev[:,:-1,:], 
                                  (Y_rev[:,1:,:]-Y_rev[:,:-1,:]).permute(0,2,1))
 
