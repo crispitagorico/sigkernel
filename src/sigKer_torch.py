@@ -38,15 +38,11 @@ def compute_sigKernel_forward_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol)
 
             inc = M_inc[block_id, i-1, j-1]
 
-            k01 = M_sol[block_id, i-1, j]
-            k10 = M_sol[block_id, i, j-1]
-            k00 = M_sol[block_id, i-1, j-1]
-
             # vanilla scheme
-            M_sol[block_id, i, j] = k01 + k10 + k00*(inc-1.)
+            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(inc-1.)
 
             # explicit scheme
-            M_sol[block_id, i, j] = (k_10+k_01)*(1.+0.5*inc+(1./12)*inc**2) - k_00*(1.-(1./12)*inc**2)
+            M_sol[block_id, i, j] = (M_sol[block_id, i-1, j]+M_sol[block_id, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id, i-1, j-1]*(1.-(1./12)*inc**2)
 
         # Wait for other threads in this block
         cuda.syncthreads()
