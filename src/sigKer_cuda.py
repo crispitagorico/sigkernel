@@ -77,7 +77,7 @@ def compute_sigKernel_backward_cuda(M_inc_rev, len_x, len_y, n_anti_diagonals, M
         # Only compute if element[i, j] is on the current anti-diagonal
         if I + J == p and (I < len_x and J < len_y):
 
-            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc[block_id, i-1, j-1]-1.)
+            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc_rev[block_id, i-1, j-1]-1.)
 
         # Wait for other threads in this block
         cuda.syncthreads()
@@ -126,8 +126,8 @@ class SigKernel(torch.autograd.Function):
         # Set CUDA's grid size to be equal to the batch size (every CUDA block processes one sample pair)
         # Set the CUDA block size to be equal to the length of the longer sequence (equal to the size of the largest diagonal)
         compute_sigKernel_forward_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc.detach()), 
-                                                                M, M, n_anti_diagonals,
-                                                                cuda.as_cuda_array(K))
+                                                             M, M, n_anti_diagonals,
+                                                             cuda.as_cuda_array(K))
 
         K = K[:,:-1,:-1]
 
@@ -135,10 +135,10 @@ class SigKernel(torch.autograd.Function):
         if XX or XY:
             
             # Compute reversed increment matrix
-            X_rev = X[:,::-1,:]
-            Y_rev = Y[:,::-1,:]
+            X_rev = X.detach()[:,::-1,:]
+            Y_rev = Y.detach()[:,::-1,:]
             M_inc_rev = torch.bmm(X_rev[:,1:,:]-X_rev[:,:-1,:], 
-                                  (Y_rev[:,1:,:]-Y_rev[:,:-1,:]).permute(0,2,1))
+                                 (Y_rev[:,1:,:]-Y_rev[:,:-1,:]).permute(0,2,1))
 
             # Prepare the tensor of output solutions to the PDE (forward)
             K_rev = torch.zeros((A, M+1, M+1), device=dev, dtype=dtype) 
