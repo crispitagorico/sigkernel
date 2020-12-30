@@ -1,7 +1,6 @@
 import torch
 
-from sigKer_fast import sig_kernel_batch, sig_kernel_batch_
-from sigKer_cuda import SigKernelCuda
+from sigKer_torch import SigKernel, SigKernelCuda
 
 
 # ===========================================================================================================
@@ -34,129 +33,6 @@ class SigLoss(torch.nn.Module):
 
         return dist
 # ===========================================================================================================
-
-# ===========================================================================================================
-class SigKernel(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, X, Y=None, n=0, solver=0, method='variation_parameters'):
-        """
-        Compute Signature Kernel and its gradients using two possible backpropagation methods
-        X,Y are two 3-tensors of shape (batch, len, dim)
-        n is the discretisation of the grid where the PDE gets solved. The higher is n, the more accurate the final output, but slower the code
-        solver=0 means a vanila finite difference scheme, solver=1 means an explicit scheme, solver=2 means an implicit scheme (deprecated)
-        method='variation_parameters' or else solve directly another PDE for gradients.
-        """
-
-        XX, YY, XY = False, False, False
-
-        if Y is None:
-            Y = X.detach().clone() 
-            if X.requires_grad:
-                XX = True
-            else:
-                YY = True
-        else:
-            XY = True
-
-        A = X.shape[0]
-        D = X.shape[2]
-        M = X.shape[1]
-
-        # 1. FORWARD
-        if XX or XY:
-            if method=='variation_parameters':
-                K, K_rev = sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=True) 
-            else:
-                K, K_rev = sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=True)
-
-            K_rev = torch.tensor(K_rev, dtype=torch.double).to(X.device)
-        else:
-            if method=='variation_parameters':
-                K =  sig_kernel_batch(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=False)
-            else:
-                K =  sig_kernel_batch_(X.detach().cpu().numpy(),Y.detach().cpu().numpy(),n=n,solver=solver,gradients=False)
-        K = torch.tensor(K, dtype=torch.double).to(X.device)
-
-        # 2. GRADIENTS
-        if XX or XY: 
-            if method=='variation_parameters':
-                # Need to get the increments of Y on the finer grid
-                inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)  #(A,N-1,D)  increments defined by the data
-                inc_Y = tile(inc_Y,1,2**n)                  #(A,(2**n)*(M-1),D)  increments on the finer grid
-
-                # Need to reorganize the K_rev matrix
-                K_rev_rev = flip(K_rev,dim=1)
-                K_rev_rev = flip(K_rev_rev,dim=2)
-
-                KK = (K[:,:-1,:-1] * K_rev_rev[:,1:,1:])                       # (A,(2**n)*(M-1),(2**n)*(N-1))
-
-                K_grad = KK[:,:,:,None]*inc_Y[:,None,:,:]                      # (A,(2**n)*(M-1),(2**n)*(N-1),D)
-
-                K_grad = (1./(2**n))*torch.sum(K_grad,axis=2)                  # (A,(2**n)*(M-1),D)
-
-                K_grad =  torch.sum(K_grad.reshape(A,M-1,2**n,D),axis=2)       # (A,M-1,D)
-
-                ctx.save_for_backward(K_grad)
-            else:
-                ctx.save_for_backward(K_rev[:,:,:,-1,-1])
-        
-        ctx.XX, ctx.YY, ctx.XY = XX, YY, XY
-
-        return K[:,-1,-1]
-
-    @staticmethod
-    def backward(ctx, grad_output):
-
-        """
-        During the forward pass, the gradients with respect to each increment in each dimension has been computed.
-        Here we derive the gradients with respect to the points of the time series.
-        """
-
-        XX, YY, XY = ctx.XX, ctx.YY, ctx.XY
-     
-        if XX or XY:
-            grad_incr , = ctx.saved_tensors
-
-            A = grad_incr.shape[0]
-            D = grad_incr.shape[2]
-            grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(torch.float64).to(grad_incr.device), grad_incr], dim=1)
-
-        if XX:
-            # remark1: grad_points=\sum_a dKa/dX, whilst dL/dX = \sum_a grad_output[a]*dKa/dX
-            # where dKa/dX is a tensor of shape (A,M,N) with zeros everywhere except for Ka[a,:,:].
-            # we need to 'inject grad_output' in grad_points, it corresponds to do grad_output[a]*grad_points[a,:,:]
-            # remark2: KXX is bilinear, and grad_points is the gradient with respect to the left variable -> we need to multiply by 2
-            return 2.*grad_output[:,None,None]*grad_points, None, None, None, None
-        if YY:
-            # should never go here
-            return None, None, None, None, None
-        if XY:
-            # see remark 1
-            return grad_output[:,None,None]*grad_points, None, None, None, None
-# ===========================================================================================================
-
-# ===========================================================================================================
-def flip(x, dim):
-    xsize = x.size()
-    dim = x.dim() + dim if dim < 0 else dim
-    x = x.view(-1, *xsize[dim:])
-    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1,
-                      -1, -1), ('cpu','cuda')[x.is_cuda])().long(), :]
-    return x.view(xsize)
-
-def tile(a, dim, n_tile):
-    init_dim = a.size(dim)
-    repeat_idx = [1] * a.dim()
-    repeat_idx[dim] = n_tile
-    a = a.repeat(*(repeat_idx))
-    order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(a.device)
-    return torch.index_select(a, dim, order_index)
-# ===========================================================================================================
-
-
-
-
 
 
 
