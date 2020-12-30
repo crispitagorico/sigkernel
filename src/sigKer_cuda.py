@@ -1,12 +1,9 @@
-import numpy as np
 import torch
 import torch.cuda
 from numba import jit
-from torch.autograd import Function
 from numba import cuda
-import math
 
-# ----------------------------------------------------------------------------------------------------------------------
+# ===========================================================================================================
 @cuda.jit
 def compute_sigKernel_forward_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol):
     """
@@ -36,27 +33,31 @@ def compute_sigKernel_forward_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol)
         # Only compute if element[i, j] is on the current anti-diagonal
         if I + J == p and (I < len_x and J < len_y):
 
-            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(M_inc[block_id, i-1, j-1]-1.)
+            inc = M_inc[block_id, i-1, j-1]
+
+            k01 = M_sol[block_id, i-1, j]
+            k10 = M_sol[block_id, i, j-1]
+            k00 = M_sol[block_id, i-1, j-1]
+
+            # vanilla scheme
+            M_sol[block_id, i, j] = k01 + k10 + k00*(inc-1.)
+
+            # explicit scheme
+            M_sol[block_id, i, j] = (k_10+k_01)*(1.+0.5*inc+(1./12)*inc**2) - k_00*(1.-(1./12)*inc**2)
 
         # Wait for other threads in this block
         cuda.syncthreads()
+# ===========================================================================================================
 
-#def forward_step_explicit(double k_00, double k_01, double k_10, double increment):
-#	return (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
-
-#def forward_step_implicit(double k_00, double k_01, double k_10, double increment):
-#	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10)
-
-# ----------------------------------------------------------------------------------------------------------------------
-
-class SigKernel(torch.autograd.Function):
+# ===========================================================================================================
+class SigKernelCuda(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, X, Y):
         """
         input
-         - X : 3-tensor of shape (N, len, dim)
-         - Y : 3-tensor of shape (N, len, dim)
+         - X : 3-tensor of shape (batch, len, dim)
+         - Y : 3-tensor of shape (batch, len, dim)
         """
 
         A = X.shape[0]
@@ -139,39 +140,4 @@ class SigKernel(torch.autograd.Function):
         grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(grad_incr.dtype).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(grad_incr.dtype).to(grad_incr.device), grad_incr], dim=1)
 
         return grad_output[:,None,None]*grad_points, None
-
-
-class SigLoss(torch.nn.Module):
-
-    def __init__(self, n_chunks=2):
-        super(SigLoss, self).__init__()
-        self.n_chunks = n_chunks
-        
-    def sig_distance(self,x,y):
-        d = torch.mean( SigKernel.apply(x,x)+ SigKernel.apply(y,y)- 2.*SigKernel.apply(x,y) )
-        return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
-
-    def forward(self, X, Y):
-
-        assert not Y.requires_grad, "the second input should not require grad"
-
-        if self.n_chunks==1:
-            return self.sig_distance(X,Y)
-
-        dist = torch.tensor(0., dtype=torch.float64)
-        for k in range(2, self.n_chunks+1):
-            X_chunks = torch.chunk(X, k, dim=1)
-            Y_chunks = torch.chunk(Y, k, dim=1)
-            for x1,x2,y1,y2 in zip(X_chunks[:-1], X_chunks[1:], Y_chunks[:-1], Y_chunks[1:]):
-                dist += self.sig_distance(torch.cat([x1,x2],dim=1),torch.cat([y1,y2],dim=1))
-
-        return dist
-
-
-def flip(x, dim):
-    xsize = x.size()
-    dim = x.dim() + dim if dim < 0 else dim
-    x = x.view(-1, *xsize[dim:])
-    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1,
-                      -1, -1), ('cpu','cuda')[x.is_cuda])().long(), :]
-    return x.view(xsize)
+# ===========================================================================================================
