@@ -67,14 +67,11 @@ class SigKernelCuda(torch.autograd.Function):
         # Compute increment matrix
         M_inc = torch.bmm(X[:,1:,:]-X[:,:-1,:], (Y[:,1:,:]-Y[:,:-1,:]).permute(0,2,1))
 
-        dev = M_inc.device
-        dtype = M_inc.dtype
-
         threads_per_block = max(M,N)
         n_anti_diagonals = 2 * threads_per_block - 1
 
         # Prepare the tensor of output solutions to the PDE (forward)
-        K = torch.zeros((A, M+1, N+1), device=dev, dtype=dtype) 
+        K = torch.zeros((A, M+1, N+1), device=M_inc.device, dtype=M_inc.dtype) 
         K[:,0,:] = 1.
         K[:,:,0] = 1. 
 
