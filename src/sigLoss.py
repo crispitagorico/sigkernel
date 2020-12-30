@@ -6,13 +6,12 @@ from sigKer_torch import SigKernel, SigKernelCuda
 # ===========================================================================================================
 class SigLoss(torch.nn.Module):
 
-    def __init__(self, device, n_chunks=1):
+    def __init__(self, n_chunks=1):
         super(SigLoss, self).__init__()
         self.n_chunks = n_chunks
-        self.device = device
         
     def sig_distance(self,x,y):
-        if self.device=='cuda':
+        if x.device.type=='cuda':
             d = torch.mean( SigKernelCuda.apply(x,x)+ SigKernelCuda.apply(y,y)- 2.*SigKernelCuda.apply(x,y) )
         else:
             d = torch.mean(SigKernel.apply(x, None)+ SigKernel.apply(y,None)- 2.*SigKernel.apply(x,y) )
