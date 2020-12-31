@@ -86,6 +86,10 @@ class SigKernel(torch.autograd.Function):
             K_rev[:,0,:] = 1.
             K_rev[:,:,0] = 1. 
 
+            # cuda parameters
+            threads_per_block = max(M,N)
+            n_anti_diagonals = 2 * threads_per_block - 1
+
             # Compute signature kernel for reversed paths
             compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
                                                                                        M, N, n_anti_diagonals,
