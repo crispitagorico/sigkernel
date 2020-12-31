@@ -177,7 +177,7 @@ def sig_kernel_batch_varpar(double[:,:,:] x, double[:,:,:] y, int n=0, int solve
 				if solver==2:
 					K[l,i+1,j+1] = forward_step_implicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 				elif solver==1:
-					K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
+					K[l,i+1,j+1] = forward_step_explicit(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 				elif solver==0:
 					K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 

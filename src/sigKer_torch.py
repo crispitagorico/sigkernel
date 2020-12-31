@@ -55,7 +55,7 @@ class SigKernel(torch.autograd.Function):
         # if on CPU
         else:
             
-            K = sig_kernel_batch_varpar(X.detach().cpu().numpy(), Y.detach().cpu().numpy(), n=n, solver=0)
+            K = sig_kernel_batch_varpar(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0)
             K = torch.tensor(K, dtype=X.dtype)
 
         ctx.save_for_backward(X,Y,K)
@@ -110,8 +110,8 @@ class SigKernel(torch.autograd.Function):
         # if on CPU
         else:
 
-            K_rev = sig_kernel_batch_varpar(X_rev.detach().cpu().numpy(), Y_rev.detach().cpu().numpy(), n=n, solver=0)
-            K_rev = torch.tensor(K, dtype=X.dtype)
+            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0)
+            K_rev = torch.tensor(K_rev, dtype=X.dtype)
 
             inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                           # (A,N-1,D)  increments defined by the data
             inc_Y = tile(inc_Y,1,2**n)                                           # (A,(2**n)*(M-1),D)  increments on the finer grid
@@ -141,8 +141,7 @@ def flip(x, dim):
     xsize = x.size()
     dim = x.dim() + dim if dim < 0 else dim
     x = x.view(-1, *xsize[dim:])
-    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1,
-                      -1, -1), ('cpu','cuda')[x.is_cuda])().long(), :]
+    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1, -1, -1), ('cpu','cuda')[x.is_cuda])().long(), :]
     return x.view(xsize)
 # ===========================================================================================================
 def tile(a, dim, n_tile):
