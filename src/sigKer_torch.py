@@ -81,8 +81,8 @@ class SigKernel(torch.autograd.Function):
             # Compute reversed increment matrix
             M_inc_rev = torch.bmm(X_rev[:,1:,:]-X_rev[:,:-1,:], (Y_rev[:,1:,:]-Y_rev[:,:-1,:]).permute(0,2,1))
 
-            # Prepare the tensor of output solutions to the PDE (forward)
-            K_rev = torch.zeros((A, M+1, N+1), device=dev, dtype=dtype) 
+            # Prepare the tensor of output solutions to the PDE (backward)
+            K_rev = torch.zeros((A, M+1, N+1), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
             K_rev[:,0,:] = 1.
             K_rev[:,:,0] = 1. 
 
