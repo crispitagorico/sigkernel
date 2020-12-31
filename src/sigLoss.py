@@ -1,8 +1,10 @@
 import torch
+from sigKer_torch import SigKernel
 
-from sigKer_torch import SigKernel, SigKernelCuda
 
-
+# ===========================================================================================================
+# Signature Loss function
+# L(x,y) = ||S(x)-S(y)||
 # ===========================================================================================================
 class SigLoss(torch.nn.Module):
 
@@ -11,10 +13,7 @@ class SigLoss(torch.nn.Module):
         self.n_chunks = n_chunks
         
     def sig_distance(self,x,y):
-        if x.device.type=='cuda':
-            d = torch.mean( SigKernelCuda.apply(x,x)+ SigKernelCuda.apply(y,y)- 2.*SigKernelCuda.apply(x,y) )
-        else:
-            d = torch.mean(SigKernel.apply(x, None)+ SigKernel.apply(y,None)- 2.*SigKernel.apply(x,y) )
+        d = torch.mean( SigKernel.apply(x,x)+ SigKernel.apply(y,y)- 2.*SigKernel.apply(x,y) )
         return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):
@@ -42,7 +41,7 @@ class SigLoss(torch.nn.Module):
 # ===========================================================================================================
 class SigLoss_naive(torch.nn.Module):
 
-    def __init__(self, n=0, n_chunks=2, method='explicit'):
+    def __init__(self, n=0, n_chunks=1, method='old'):
         super(SigLoss_naive, self).__init__()
         self.n = n
         self.n_chunks = n_chunks
@@ -68,7 +67,7 @@ class SigLoss_naive(torch.nn.Module):
 # ===========================================================================================================
 
 # ===========================================================================================================
-def SigKernel_naive(X,Y,n=0,method='explicit'):
+def SigKernel_naive(X,Y,n=0,method='old'):
 
     A = len(X)
     M = X[0].shape[0]
