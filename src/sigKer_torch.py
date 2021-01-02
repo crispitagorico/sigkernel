@@ -241,8 +241,9 @@ class SigKernelGramMat(torch.autograd.Function):
             G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0, sym=sym, full=True)
             G_rev = torch.tensor(G_rev, dtype=X.dtype)
 
-            inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                          # (B,N-1,D)  increments defined by the data
-            inc_Y = tile(inc_Y,1,2**n)                                          # (B,(2**n)*(N-1),D)  increments on the finer grid
+            inc_Y = Y[:,1:,:]-Y[:,:-1,:]
+            #inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                          # (B,N-1,D)  increments defined by the data
+            #inc_Y = tile(inc_Y,1,2**n)                                          # (B,(2**n)*(N-1),D)  increments on the finer grid
 
             G_rev = flip(flip(G_rev,dim=2),dim=3)
 
@@ -250,9 +251,10 @@ class SigKernelGramMat(torch.autograd.Function):
 
             grad_incr = GG[:,:,:,:,None]*inc_Y[None,:,None,:,:]                 # (A,B,(2**n)*(M-1),(2**n)*(N-1),D)
 
-            grad_incr = (1./(2**n))*torch.sum(grad_incr,axis=3)                 # (A,B,(2**n)*(M-1),D)
+            #grad_incr = (1./(2**n))*torch.sum(grad_incr,axis=3)                 # (A,B,(2**n)*(M-1),D)
+            grad_incr = torch.sum(grad_incr,axis=3)
 
-            grad_incr =  torch.sum(grad_incr.reshape(A,B,M-1,2**n,D),axis=3)    # (A,B, M-1,D)
+            #grad_incr =  torch.sum(grad_incr.reshape(A,B,M-1,2**n,D),axis=3)    # (A,B, M-1,D)
 
 
         grad_points = -torch.cat([grad_incr,torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device)], dim=2) + torch.cat([torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device), grad_incr], dim=2)
