@@ -62,14 +62,18 @@ class SigKernel(torch.autograd.Function):
             K = sig_kernel_batch_varpar(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0)
             K = torch.tensor(K, dtype=X.dtype)
 
-        ctx.save_for_backward(A,M,N,D,X,Y,K)
+        ctx.save_for_backward(X,Y,K)
 
         return K[:,-1,-1]
 
     @staticmethod
     def backward(ctx, grad_output):
     
-        A, M, N, D, X, Y, K = ctx.saved_tensors
+        X, Y, K = ctx.saved_tensors
+        A = X.shape[0]
+        M = X.shape[1]
+        N = Y.shape[1]
+        D = X.shape[2]
             
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
@@ -158,7 +162,8 @@ class SigKernelGramMat(torch.autograd.Function):
             G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0, sym=sym, full=True)
             G = torch.tensor(G, dtype=X.dtype)
 
-        ctx.save_for_backward(A,B,M,N,D,sym,X,Y,G)
+        ctx.save_for_backward(X,Y,G)
+        ctx.sym = sym
 
         return G[:,:,-1,-1]
 
@@ -166,7 +171,13 @@ class SigKernelGramMat(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
 
-        A, B, M, N, D, sym, X, Y, G = ctx.saved_tensors
+        X, Y, G = ctx.saved_tensors
+        sym = ctx.sym
+        A = X.shape[0]
+        B = Y.shape[0]
+        M = X.shape[1]
+        N = Y.shape[1]
+        D = X.shape[2]
 
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
