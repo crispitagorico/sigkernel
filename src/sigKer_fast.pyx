@@ -66,13 +66,13 @@ def sig_distance(double[:,:] x, double[:,:] y, int n=0, int solver=0):
 
 
 def mmd_distance(double[:,:,:] x, double[:,:,:] y, int n=0):
-	cdef double[:,:] K_XX = Gram_matrix(x,x,n,sym=True)
-	cdef double[:,:] K_YY = Gram_matrix(y,y,n,sym=True)
-	cdef double[:,:] K_XY = Gram_matrix(x,y,n,sym=False)
+	cdef double[:,:] K_XX = sig_kernel_Gram_matrix(x,x,n,sym=True)
+	cdef double[:,:] K_YY = sig_kernel_Gram_matrix(y,y,n,sym=True)
+	cdef double[:,:] K_XY = sig_kernel_Gram_matrix(x,y,n,sym=False)
 	return (np.mean(K_XX) + np.mean(K_YY) - 2.*np.mean(K_XY))**(0.5)
 
 
-def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
+def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint sym=False, bint full=False):
 
 	cdef int A = x.shape[0]
 	cdef int B = y.shape[0]
@@ -111,9 +111,14 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 						for k in range(D):
 							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 						
-						K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
-						K[m,l,i+1,j+1] = K[l,m,i+1,j+1]
+						if solver==0:
+							K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						elif solver==1:
+							K[l,m,i+1,j+1] = forward_step_explicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						else:
+							K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 
+						K[m,l,i+1,j+1] = K[l,m,i+1,j+1]
 
 	else:
 		for l in range(A):
@@ -135,9 +140,17 @@ def Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, bint sym=False):
 						for k in range(D):
 							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 	
-						K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						if solver==0:
+							K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						elif solver==1:
+							K[l,m,i+1,j+1] = forward_step_explicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+						else:
+							K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 	
-	return np.array(K[:,:,MM,NN])
+	if full:
+		return np.array(K)
+	else:
+		return np.array(K[:,:,MM,NN])
 
 
 def sig_kernel_batch_varpar(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0):

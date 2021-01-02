@@ -3,7 +3,7 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from sigKer_fast import sig_kernel_batch_varpar
+from sigKer_fast import sig_kernel_batch_varpar, sig_kernel_Gram_matrix
 from sigKer_cuda import compute_sig_kernel_batch_varpar_from_increments_cuda
 
 # ===========================================================================================================
@@ -11,6 +11,10 @@ from sigKer_cuda import compute_sig_kernel_batch_varpar_from_increments_cuda
 n = 0 
 # ===========================================================================================================
 
+
+# ===========================================================================================================
+# Signature kernel k(x,y) = <S(x),S(y)> computed by solving Goursat PDE
+# and gradients via second PDE and variation of parameters.
 # ===========================================================================================================
 class SigKernel(torch.autograd.Function):
 
@@ -58,18 +62,14 @@ class SigKernel(torch.autograd.Function):
             K = sig_kernel_batch_varpar(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0)
             K = torch.tensor(K, dtype=X.dtype)
 
-        ctx.save_for_backward(X,Y,K)
+        ctx.save_for_backward(A,M,N,D,X,Y,K)
 
         return K[:,-1,-1]
 
     @staticmethod
     def backward(ctx, grad_output):
     
-        X, Y, K = ctx.saved_tensors
-        A = X.shape[0]
-        M = X.shape[1]
-        N = Y.shape[1]
-        D = X.shape[2]
+        A, M, N, D, X, Y, K = ctx.saved_tensors
             
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
@@ -137,6 +137,80 @@ class SigKernel(torch.autograd.Function):
 
 
 # ===========================================================================================================
+# Signature Kernel Gram Matrix
+# ===========================================================================================================
+class SigKernelGramMat(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, X, Y, sym=False):
+
+        A = X.shape[0]
+        B = Y.shape[0]
+        M = X.shape[1]
+        N = Y.shape[1]
+        D = X.shape[2]
+
+        # if on GPU
+        if X.device.type=='cuda':
+            pass
+
+        else:
+            G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0, sym=sym, full=True)
+            G = torch.tensor(G, dtype=X.dtype)
+
+        ctx.save_for_backward(A,B,M,N,D,sym,X,Y,G)
+
+        return G[:,:,-1,-1]
+
+
+    @staticmethod
+    def backward(ctx, grad_output):
+
+        A, B, M, N, D, sym, X, Y, G = ctx.saved_tensors
+
+        # Reverse paths
+        X_rev = torch.flip(X, dims=[1])
+        Y_rev = torch.flip(Y, dims=[1])
+
+        # if on GPU
+        if X.device.type=='cuda':
+            pass
+
+        # if on CPU
+        else:
+
+            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0, sym=sym, full=True)
+            G_rev = torch.tensor(G_rev, dtype=X.dtype)
+
+            inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                          # (B,N-1,D)  increments defined by the data
+            inc_Y = tile(inc_Y,1,2**n)                                          # (B,(2**n)*(N-1),D)  increments on the finer grid
+
+            G_rev = flip(flip(G_rev,dim=2),dim=3)
+
+            GG = (G[:,:,:-1,:-1] * G_rev[:,:,1:,1:])                            # (A,B,(2**n)*(M-1),(2**n)*(N-1))
+
+            grad_incr = GG[:,:,:,:,None]*inc_Y[None,:,None,:,:]                 # (A,B,(2**n)*(M-1),(2**n)*(N-1),D)
+
+            grad_incr = (1./(2**n))*torch.sum(grad_incr,axis=3)                 # (A,B,(2**n)*(M-1),D)
+
+            grad_incr =  torch.sum(grad_incr.reshape(A,B,M-1,2**n,D),axis=3)    # (A,B, M-1,D)
+
+
+        grad_points = -torch.cat([grad_incr,torch.zeros((A, B, 1, D)).type(X.dtype)], dim=2) + torch.cat([torch.zeros((A, B, 1, D)).type(X.dtype), grad_incr], dim=2)
+
+        if sym:
+            grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+            return grad, None, None  
+        else:
+            # dL/dX = dL/dK dK/dX = (\sum_j dL/dKij dKij/dXi)_i = (\sum_j{ grad_out_ij * dKij/dXi})_i for any loss L
+            grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
+            return grad, None, None
+# ===========================================================================================================
+
+
+# ===========================================================================================================
+# Various utility functions
+# ===========================================================================================================
 def flip(x, dim):
     xsize = x.size()
     dim = x.dim() + dim if dim < 0 else dim
@@ -152,3 +226,63 @@ def tile(a, dim, n_tile):
     order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(a.device)
     return torch.index_select(a, dim, order_index)
 # ===========================================================================================================
+
+
+# ===========================================================================================================
+# Naive implementation of Signature Kernel with original finite difference scheme (slow, just for testing)
+# ===========================================================================================================
+def SigKernel_naive(X,Y):
+
+    A = len(X)
+    M = X[0].shape[0]
+    N = Y[0].shape[0]
+
+    K_XY = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
+    K_XY[:, 0, :] = 1.
+    K_XY[:, :, 0] = 1.
+
+    for i in range(0, (2**n)*(M-1)):
+        for j in range(0, (2**n)*(N-1)):
+
+            ii = int(i / (2 ** n))
+            jj = int(j / (2 ** n))
+
+            inc_X_i = (X[:, ii + 1, :] - X[:, ii, :])/float(2**n)  
+            inc_Y_j = (Y[:, jj + 1, :] - Y[:, jj, :])/float(2**n)  
+
+            increment_XY = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j)  
+
+            K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() + K_XY[:, i, j].clone()*(increment_XY.clone()-1.)
+            
+    return K_XY[:, -1, -1]
+# ===========================================================================================================
+
+
+# ===========================================================================================================
+# Naive implementation of Signature Gram matrix with original finite difference scheme (slow, just for testing)
+# ===========================================================================================================
+def SigKernelGramMat_naive(X,Y):
+
+    A = len(X)
+    B = len(Y)
+    M = X[0].shape[0]
+    N = Y[0].shape[0]
+
+    K_XY = torch.zeros((A,B, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
+    K_XY[:,:, 0, :] = 1.
+    K_XY[:,:, :, 0] = 1.
+
+    for i in range(0, (2**n)*(M-1)):
+        for j in range(0, (2**n)*(N-1)):
+
+            ii = int(i / (2 ** n))
+            jj = int(j / (2 ** n))
+
+            inc_X_i = (X[:, ii + 1, :] - X[:,ii, :])/float(2**n)  # (A,D)
+            inc_Y_j = (Y[:, jj + 1, :] - Y[:, jj, :])/float(2**n)  # (B,D)
+
+            increment_XY = torch.einsum('ik,jk->ij', inc_X_i, inc_Y_j)  # (A,B) 
+
+            K_XY[:,:, i + 1, j + 1] = K_XY[:,:, i + 1, j].clone() + K_XY[:,:, i, j + 1].clone() + K_XY[:,:, i,j].clone()* increment_XY.clone() - K_XY[ :,:, i,j].clone()
+
+    return K_XY[:,:, -1, -1]
