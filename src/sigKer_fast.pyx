@@ -83,7 +83,7 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 	cdef double increment
 	cdef double factor = 2**(2*n)
 
-	cdef int i, j, k, l, ii, jj
+	cdef int i, j, k, l, m, ii, jj
 	cdef int MM = (2**n)*(M-1)
 	cdef int NN = (2**n)*(N-1)
 
@@ -118,7 +118,7 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 						else:
 							K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
 
-						K[m,l,i+1,j+1] = K[l,m,i+1,j+1]
+						K[m,l,i+1,j+1] = K[l,m,j+1,i+1]
 
 	else:
 		for l in range(A):

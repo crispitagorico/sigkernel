@@ -178,7 +178,7 @@ class SigKernelGramMat(torch.autograd.Function):
             G = G[:,:,:-1,:-1]
 
         else:
-            G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0, sym=False, full=True)
+            G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0, sym=sym, full=True)
             G = torch.tensor(G, dtype=X.dtype)
 
         ctx.save_for_backward(X,Y,G)
@@ -238,7 +238,7 @@ class SigKernelGramMat(torch.autograd.Function):
         # if on CPU
         else:
 
-            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0, sym=False, full=True)
+            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0, sym=sym, full=True)
             G_rev = torch.tensor(G_rev, dtype=X.dtype)
 
             inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                          # (B,N-1,D)  increments defined by the data
