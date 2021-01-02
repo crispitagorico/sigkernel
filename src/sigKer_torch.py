@@ -134,7 +134,7 @@ class SigKernel(torch.autograd.Function):
         if Y.requires_grad:
             grad_incr*=2
 
-        grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D)).type(grad_incr.dtype).to(grad_incr.device)], dim=1) + torch.cat([torch.zeros((A, 1, D)).type(grad_incr.dtype).to(grad_incr.device), grad_incr], dim=1)
+        grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D), dtype=X.dtype, device=X.device)], dim=1) + torch.cat([torch.zeros((A, 1, D), dtype=X.dtype, device=X.device), grad_incr], dim=1)
 
         return grad_output[:,None,None]*grad_points, None
 # ===========================================================================================================
@@ -255,7 +255,7 @@ class SigKernelGramMat(torch.autograd.Function):
             grad_incr =  torch.sum(grad_incr.reshape(A,B,M-1,2**n,D),axis=3)    # (A,B, M-1,D)
 
 
-        grad_points = -torch.cat([grad_incr,torch.zeros((A, B, 1, D)).type(X.dtype)], dim=2) + torch.cat([torch.zeros((A, B, 1, D)).type(X.dtype), grad_incr], dim=2)
+        grad_points = -torch.cat([grad_incr,torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device)], dim=2) + torch.cat([torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device), grad_incr], dim=2)
 
         if sym:
             grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
