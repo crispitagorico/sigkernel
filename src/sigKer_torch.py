@@ -4,7 +4,7 @@ import torch.cuda
 from numba import cuda
 
 from sigKer_fast import sig_kernel_batch_varpar, sig_kernel_Gram_matrix
-from sigKer_cuda import compute_sig_kernel_batch_varpar_from_increments_cuda
+from sigKer_cuda import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
 
 # ===========================================================================================================
 # PDE discretization parameter
