@@ -156,7 +156,26 @@ class SigKernelGramMat(torch.autograd.Function):
 
         # if on GPU
         if X.device.type=='cuda':
-            pass
+
+            # Compute increment matrix
+            M_inc = torch.einsum('ipk,jqk->ijpq', X[:,1:,:]-X[:,:-1,:], Y[:,1:,:]-Y[:,:-1,:])
+
+            # cuda parameters
+            threads_per_block = max(M,N)
+            n_anti_diagonals = 2 * threads_per_block - 1
+
+            # Prepare the tensor of output solutions to the PDE (forward)
+            G = torch.zeros((A, B, M+1, N+1), device=M_inc.device, dtype=M_inc.dtype) 
+            G[:,:,0,:] = 1.
+            G[:,:,:,0] = 1. 
+
+            # Run the CUDA kernel.
+            blockspergrid = (A,B)
+            compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(M_inc.detach()),
+                                                                                                      M, N, n_anti_diagonals,
+                                                                                                      cuda.as_cuda_array(G))
+
+            G = G[:,:,:-1,:-1]
 
         else:
             G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0, sym=sym, full=True)
@@ -185,7 +204,36 @@ class SigKernelGramMat(torch.autograd.Function):
 
         # if on GPU
         if X.device.type=='cuda':
-            pass
+
+            # Compute reversed increment matrix
+            M_inc_rev = torch.einsum('ipk,jqk->ijpq', X_rev[:,1:,:]-X_rev[:,:-1,:], Y_rev[:,1:,:]-Y_rev[:,:-1,:])
+
+            # Prepare the tensor of output solutions to the PDE (backward)
+            G_rev = torch.zeros((A, B, M+1, N+1), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
+            G_rev[:,:,0,:] = 1.
+            G_rev[:,:,:,0] = 1. 
+
+            # cuda parameters
+            threads_per_block = max(M,N)
+            n_anti_diagonals = 2 * threads_per_block - 1
+
+            # Compute signature kernel for reversed paths
+            blockspergrid = (A,B)
+            compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
+                                                                                                      M, N, n_anti_diagonals,
+                                                                                                      cuda.as_cuda_array(G_rev))
+
+            G_rev = G_rev[:,:,:-1,:-1]
+
+            inc_Y = Y[:,1:,:]-Y[:,:-1,:]                              
+
+            G_rev = flip(flip(G_rev,dim=2),dim=3)
+        
+            GG =  G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]                   
+        
+            grad_incr = GG[:,:,:,:,None]*inc_Y[None,:,None,:,:]      
+        
+            grad_incr = torch.sum(grad_incr,axis=3)                   
 
         # if on CPU
         else:
@@ -198,7 +246,7 @@ class SigKernelGramMat(torch.autograd.Function):
 
             G_rev = flip(flip(G_rev,dim=2),dim=3)
 
-            GG = (G[:,:,:-1,:-1] * G_rev[:,:,1:,1:])                            # (A,B,(2**n)*(M-1),(2**n)*(N-1))
+            GG = G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]                              # (A,B,(2**n)*(M-1),(2**n)*(N-1))
 
             grad_incr = GG[:,:,:,:,None]*inc_Y[None,:,None,:,:]                 # (A,B,(2**n)*(M-1),(2**n)*(N-1),D)
 
@@ -213,7 +261,6 @@ class SigKernelGramMat(torch.autograd.Function):
             grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
             return grad, None, None  
         else:
-            # dL/dX = dL/dK dK/dX = (\sum_j dL/dKij dKij/dXi)_i = (\sum_j{ grad_out_ij * dKij/dXi})_i for any loss L
             grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
             return grad, None, None
 # ===========================================================================================================
