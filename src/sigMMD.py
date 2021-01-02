@@ -16,11 +16,11 @@ class SigMMD(torch.nn.Module):
 
         assert not Y.requires_grad, "the second input should not require grad"
 
-        K_XX = SigKernelGramMat.apply(X,X,sym=True)
+        K_XX = SigKernelGramMat.apply(X,X,True)
         
-        K_YY = SigKernelGramMat.apply(Y,Y,sym=True)
+        K_YY = SigKernelGramMat.apply(Y,Y,True)
 
-        K_XY = SigKernelGramMat.apply(X,Y,sym=False)
+        K_XY = SigKernelGramMat.apply(X,Y,False)
 
         MMD_squared = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
         return MMD_squared
