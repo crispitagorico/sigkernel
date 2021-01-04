@@ -5,41 +5,6 @@ from scipy.ndimage.interpolation import shift
 from scipy.integrate import odeint
 import math
 
-def Lorenz_(state, t):
-    # unpack the state vector
-    x = state[0]
-    y = state[1]
-    z = state[2]
-
-    # constants for dynamics
-    sigma=10.
-    rho=28.
-    beta=8./3.
-
-    # compute state derivatives
-    xd = sigma * (y-x)
-    yd = (rho-z)*x - y
-    zd = x*y - beta*z
-
-    # return the state derivatives
-    return [xd, yd, zd]
-
-def random_ic(a=1,b=5):
-    return [np.random.uniform(a,b),np.random.uniform(a,b),np.random.uniform(a,b)]
-
-def Lorenz(N, time_steps, T=10.):
-    t = np.arange(0., T, T/time_steps)
-    return [0.1*(odeint(Lorenz_, random_ic(), t)+brownian(time_steps-1,3)) for k in range(N)]
-
-
-def naive_sig_kernel(x,y,depth):
-    sigx = iisignature.sig(x,depth,2)
-    sigy = iisignature.sig(y,depth,2)
-    k_true = np.ones((len(x),len(y)))
-    for i,sx in enumerate(sigx):
-        for j,sy in enumerate(sigy):
-            k_true[i+1,j+1] = 1.+np.dot(sigx[i],sigy[j])
-    return k_true
 
 def white(steps, width, time=1.):
     mu, sigma = 0, math.sqrt(time / steps) 
@@ -55,6 +20,15 @@ def brownian_perturbed(steps, width, time=1., amplitude=1.):
     t = np.random.randint(steps)
     path[t:] = path[t:] + amplitude
     return path
+
+def naive_sig_kernel(x,y,depth):
+    sigx = iisignature.sig(x,depth,2)
+    sigy = iisignature.sig(y,depth,2)
+    k_true = np.ones((len(x),len(y)))
+    for i,sx in enumerate(sigx):
+        for j,sy in enumerate(sigy):
+            k_true[i+1,j+1] = 1.+np.dot(sigx[i],sigy[j])
+    return k_true
 
 def truncated_sigKernel(X, num_levels, order=-1, difference=True, sigma=1.):
     """
