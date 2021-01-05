@@ -323,7 +323,7 @@ def tile(a, dim, n_tile):
 # ===========================================================================================================
 # Naive implementation of Signature Kernel with original finite difference scheme (slow, just for testing)
 # ===========================================================================================================
-def SigKernel_naive(X,Y):
+def SigKernel_naive(X,Y,n=0,solver=0):
 
     A = len(X)
     M = X[0].shape[0]
@@ -342,9 +342,16 @@ def SigKernel_naive(X,Y):
             inc_X_i = (X[:, ii + 1, :] - X[:, ii, :])/float(2**n)  
             inc_Y_j = (Y[:, jj + 1, :] - Y[:, jj, :])/float(2**n)  
 
-            increment_XY = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j)  
+            increment = torch.einsum('ik,ik->i', inc_X_i, inc_Y_j).clone()  
 
-            K_XY[:, i + 1, j + 1] = K_XY[:, i + 1, j].clone() + K_XY[:, i, j + 1].clone() + K_XY[:, i, j].clone()*(increment_XY.clone()-1.)
+            k_10 = K_XY[:, i + 1, j].clone()
+            k_01 = K_XY[:, i, j + 1].clone()
+            k_00 = K_XY[:, i, j].clone()
+
+            if solver==0:
+                K_XY[:, i + 1, j + 1] = k_10 + k_01 + k_00*(increment-1.)
+            else:
+                K_XY[:, i + 1, j + 1] = (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
             
     return K_XY[:, -1, -1]
 # ===========================================================================================================
@@ -353,7 +360,7 @@ def SigKernel_naive(X,Y):
 # ===========================================================================================================
 # Naive implementation of Signature Gram matrix with original finite difference scheme (slow, just for testing)
 # ===========================================================================================================
-def SigKernelGramMat_naive(X,Y):
+def SigKernelGramMat_naive(X,Y,n=0,solver=0):
 
     A = len(X)
     B = len(Y)
@@ -373,8 +380,15 @@ def SigKernelGramMat_naive(X,Y):
             inc_X_i = (X[:, ii + 1, :] - X[:,ii, :])/float(2**n)  # (A,D)
             inc_Y_j = (Y[:, jj + 1, :] - Y[:, jj, :])/float(2**n)  # (B,D)
 
-            increment_XY = torch.einsum('ik,jk->ij', inc_X_i, inc_Y_j)  # (A,B) 
+            increment = torch.einsum('ik,jk->ij', inc_X_i, inc_Y_j).clone()  # (A,B) 
 
-            K_XY[:,:, i + 1, j + 1] = K_XY[:,:, i + 1, j].clone() + K_XY[:,:, i, j + 1].clone() + K_XY[:,:, i,j].clone()* increment_XY.clone() - K_XY[ :,:, i,j].clone()
+            k_10 = K_XY[:, :, i + 1, j].clone()
+            k_01 = K_XY[:, :, i, j + 1].clone()
+            k_00 = K_XY[:, :, i, j].clone()
+
+            if solver==0:
+                K_XY[:, :, i + 1, j + 1] = k_10 + k_01 + k_00*(increment-1.)
+            else:
+                K_XY[:, :, i + 1, j + 1] = (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
 
     return K_XY[:,:, -1, -1]

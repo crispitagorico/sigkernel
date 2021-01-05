@@ -42,12 +42,14 @@ class SigLoss(torch.nn.Module):
 # ===========================================================================================================
 class SigLoss_naive(torch.nn.Module):
 
-    def __init__(self, n_chunks=1):
+    def __init__(self, n=0, solver=0, n_chunks=1):
         super(SigLoss_naive, self).__init__()
+        self.n = n
+        self.solver = solver
         self.n_chunks = n_chunks
 
     def sig_distance(self,x,y):
-        d = torch.mean( SigKernel_naive(x,x)+ SigKernel_naive(y,y) - 2.*SigKernel_naive(x,y) ) 
+        d = torch.mean( SigKernel_naive(x,x,self.n,self.solver)+ SigKernel_naive(y,y,self.n,self.solver) - 2.*SigKernel_naive(x,y,self.n,self.solver) ) 
         return d #+ torch.mean(torch.abs(x[:,0,:]-y[:,0,:])) + torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):

@@ -33,11 +33,13 @@ class SigMMD(torch.nn.Module):
 # =========================================================================================================================================
 class SigMMD_naive(torch.nn.Module):
 
-    def __init__(self):
+    def __init__(self, n=0, solver=0):
         super(SigMMD_naive, self).__init__()
+        self.n = n
+        self.solver = solver
 
     def forward(self, X, Y):
-        K_XX = SigKernelGramMat_naive(X,X)
-        K_YY = SigKernelGramMat_naive(Y,Y)    
-        K_XY = SigKernelGramMat_naive(X,Y)
+        K_XX = SigKernelGramMat_naive(X,X,self.n,self.solver)
+        K_YY = SigKernelGramMat_naive(Y,Y,self.n,self.solver)    
+        K_XY = SigKernelGramMat_naive(X,Y,self.n,self.solver)
         return torch.mean(K_XX)+torch.mean(K_YY)-2.*torch.mean(K_XY)
