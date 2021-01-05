@@ -12,9 +12,10 @@ class SigLoss(torch.nn.Module):
     def __init__(self, n_chunks=1, solver=0):
         super(SigLoss, self).__init__()
         self.n_chunks = n_chunks
+        self.solver=solver
         
     def sig_distance(self,x,y):
-        d = torch.mean( SigKernel.apply(x,x,solver)+ SigKernel.apply(y,y,solver)- 2.*SigKernel.apply(x,y,solver) )
+        d = torch.mean( SigKernel.apply(x,x,self.solver)+ SigKernel.apply(y,y,self.solver)- 2.*SigKernel.apply(x,y,self.solver) )
         return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):

@@ -11,16 +11,17 @@ class SigMMD(torch.nn.Module):
 
     def __init__(self, solver=0):
         super(SigMMD, self).__init__()
+        self.solver = solver
 
     def forward(self, X, Y):
 
         assert not Y.requires_grad, "the second input should not require grad"
 
-        K_XX = SigKernelGramMat.apply(X,X,solver,True)
+        K_XX = SigKernelGramMat.apply(X,X,self.solver,True)
         
-        K_YY = SigKernelGramMat.apply(Y,Y,solver,True)
+        K_YY = SigKernelGramMat.apply(Y,Y,self.solver,True)
 
-        K_XY = SigKernelGramMat.apply(X,Y,solver,False)
+        K_XY = SigKernelGramMat.apply(X,Y,self.solver,False)
 
         MMD_squared = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
         return MMD_squared
