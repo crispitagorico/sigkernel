@@ -16,10 +16,10 @@ class SigKernel(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, Y, n=0, solver=0):
         """
-         Compute Signature Kernel and its gradients via variation of parameters. Supports both CPU and GPU.
+            Compute Signature Kernel and its gradients via variation of parameters. Supports both CPU and GPU.
          
-         - X : 3-tensor of shape (batch, len, dim)
-         - Y : 3-tensor of shape (batch, len, dim)       
+            - X : 3-tensor of shape (batch, len, dim)
+            - Y : 3-tensor of shape (batch, len, dim)       
         """
 
         A = X.shape[0]
