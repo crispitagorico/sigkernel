@@ -28,7 +28,7 @@ class SigKernel(torch.autograd.Function):
         D = X.shape[2]
 
         MM = (2**n)*(M-1)
-	    NN = (2**n)*(N-1)
+        NN = (2**n)*(N-1)
 
         # if on GPU
         if X.device.type=='cuda':
@@ -89,7 +89,7 @@ class SigKernel(torch.autograd.Function):
         D = X.shape[2]
 
         MM = (2**n)*(M-1)
-	    NN = (2**n)*(N-1)
+        NN = (2**n)*(N-1)
             
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
@@ -170,7 +170,7 @@ class SigKernelGramMat(torch.autograd.Function):
         D = X.shape[2]
 
         MM = (2**n)*(M-1)
-	    NN = (2**n)*(N-1)
+        NN = (2**n)*(N-1)
 
         # if on GPU
         if X.device.type=='cuda':
@@ -232,7 +232,7 @@ class SigKernelGramMat(torch.autograd.Function):
         D = X.shape[2]
 
         MM = (2**n)*(M-1)
-	    NN = (2**n)*(N-1)
+        NN = (2**n)*(N-1)
 
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
