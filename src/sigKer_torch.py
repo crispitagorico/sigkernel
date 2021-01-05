@@ -33,15 +33,11 @@ class SigKernel(torch.autograd.Function):
         # if on GPU
         if X.device.type=='cuda':
 
-            assert max(MM,NN) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
+            assert max(MM+1,NN+1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
             # increments partitioning for PDE grid solver
-            X_ = tile(X, 1, 2**n)
-            Y_ = tile(Y, 1, 2**n)
-
-            # increments
-            inc_X = (X_[:,1:,:]-X_[:,:-1,:])/float(2**n)
-            inc_Y = (Y_[:,1:,:]-Y_[:,:-1,:])/float(2**n)
+            inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)
+            inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)
 
             # Compute increment matrix
             M_inc = torch.bmm(inc_X, inc_Y.permute(0,2,1))
@@ -67,7 +63,7 @@ class SigKernel(torch.autograd.Function):
         # if on CPU
         else:
             
-            K = sig_kernel_batch_varpar(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0)
+            K = sig_kernel_batch_varpar(X.detach().numpy(), Y.detach().numpy(), n=n, solver=solver)
             K = torch.tensor(K, dtype=X.dtype)
 
         ctx.save_for_backward(X,Y,K)
@@ -99,12 +95,8 @@ class SigKernel(torch.autograd.Function):
         if X.device.type=='cuda':
 
             # increments partitioning for PDE grid solver
-            X_rev_ = tile(X_rev, 1, 2**n)
-            Y_rev_ = tile(Y_rev, 1, 2**n)
-
-            # increments
-            inc_X_rev = (X_rev_[:,1:,:]-X_rev_[:,:-1,:])/float(2**n)
-            inc_Y_rev = (Y_rev_[:,1:,:]-Y_rev_[:,:-1,:])/float(2**n)
+            inc_X_rev = tile(X_rev[:,1:,:]-X_rev[:,:-1,:],1,2**n)/float(2**n)
+            inc_Y_rev = tile(Y_rev[:,1:,:]-Y_rev[:,:-1,:],1,2**n)/float(2**n)
 
             # Compute reversed increment matrix
             M_inc_rev = torch.bmm(inc_X_rev, inc_Y_rev.permute(0,2,1))
@@ -178,12 +170,8 @@ class SigKernelGramMat(torch.autograd.Function):
             assert max(MM,NN) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
             # increments partitioning for PDE grid solver
-            X_ = tile(X, 1, 2**n)
-            Y_ = tile(Y, 1, 2**n)
-
-            # increments
-            inc_X = (X_[:,1:,:]-X_[:,:-1,:])/float(2**n)
-            inc_Y = (Y_[:,1:,:]-Y_[:,:-1,:])/float(2**n)
+            inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)
+            inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)
 
             # Compute increment matrix
             M_inc = torch.einsum('ipk,jqk->ijpq', inc_X, inc_Y)
@@ -242,12 +230,8 @@ class SigKernelGramMat(torch.autograd.Function):
         if X.device.type=='cuda':
 
             # increments partitioning for PDE grid solver
-            X_rev_ = tile(X_rev, 1, 2**n)
-            Y_rev_ = tile(Y_rev, 1, 2**n)
-
-            # increments
-            inc_X_rev = (X_rev_[:,1:,:]-X_rev_[:,:-1,:])/float(2**n)
-            inc_Y_rev = (Y_rev_[:,1:,:]-Y_rev_[:,:-1,:])/float(2**n)
+            inc_X_rev = tile(X_rev[:,1:,:]-X_rev[:,:-1,:],1,2**n)/float(2**n)
+            inc_Y_rev = tile(Y_rev[:,1:,:]-Y_rev[:,:-1,:],1,2**n)/float(2**n)
 
             # Compute reversed increment matrix
             M_inc_rev = torch.einsum('ipk,jqk->ijpq', inc_X_rev, inc_Y_rev)
