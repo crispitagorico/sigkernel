@@ -47,11 +47,11 @@ class SigKernel(torch.autograd.Function):
             M_inc = torch.bmm(inc_X, inc_Y.permute(0,2,1))
             
             # cuda parameters
-            threads_per_block = max(MM,NN)
+            threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Prepare the tensor of output solutions to the PDE (forward)
-            K = torch.zeros((A, MM+1, NN+1), device=M_inc.device, dtype=M_inc.dtype) 
+            K = torch.zeros((A, MM+2, NN+2), device=M_inc.device, dtype=M_inc.dtype) 
             K[:,0,:] = 1.
             K[:,:,0] = 1. 
 
@@ -59,7 +59,7 @@ class SigKernel(torch.autograd.Function):
             # Set CUDA's grid size to be equal to the batch size (every CUDA block processes one sample pair)
             # Set the CUDA block size to be equal to the length of the longer sequence (equal to the size of the largest diagonal)
             compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc.detach()),
-                                                                                       MM, NN, n_anti_diagonals,
+                                                                                       MM+1, NN+1, n_anti_diagonals,
                                                                                        cuda.as_cuda_array(K), solver)
 
             K = K[:,:-1,:-1]
@@ -110,7 +110,7 @@ class SigKernel(torch.autograd.Function):
             M_inc_rev = torch.bmm(inc_X_rev, inc_Y_rev.permute(0,2,1))
 
             # Prepare the tensor of output solutions to the PDE (backward)
-            K_rev = torch.zeros((A, MM+1, NN+1), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
+            K_rev = torch.zeros((A, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
             K_rev[:,0,:] = 1.
             K_rev[:,:,0] = 1. 
 
@@ -120,7 +120,7 @@ class SigKernel(torch.autograd.Function):
 
             # Compute signature kernel for reversed paths
             compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
-                                                                                       MM, NN, n_anti_diagonals,
+                                                                                       MM+1, NN+1, n_anti_diagonals,
                                                                                        cuda.as_cuda_array(K_rev), solver)
 
             K_rev = K_rev[:,:-1,:-1]      
@@ -193,7 +193,7 @@ class SigKernelGramMat(torch.autograd.Function):
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Prepare the tensor of output solutions to the PDE (forward)
-            G = torch.zeros((A, B, MM+1, NN+1), device=M_inc.device, dtype=M_inc.dtype) 
+            G = torch.zeros((A, B, MM+2, NN+2), device=M_inc.device, dtype=M_inc.dtype) 
             G[:,:,0,:] = 1.
             G[:,:,:,0] = 1. 
 
@@ -253,7 +253,7 @@ class SigKernelGramMat(torch.autograd.Function):
             M_inc_rev = torch.einsum('ipk,jqk->ijpq', inc_X_rev, inc_Y_rev)
 
             # Prepare the tensor of output solutions to the PDE (backward)
-            G_rev = torch.zeros((A, B, MM+1, NN+1), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
+            G_rev = torch.zeros((A, B, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
             G_rev[:,:,0,:] = 1.
             G_rev[:,:,:,0] = 1. 
 
