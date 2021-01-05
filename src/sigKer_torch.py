@@ -19,7 +19,7 @@ n = 0
 class SigKernel(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, X, Y):
+    def forward(ctx, X, Y, solver=0):
         """
          Compute Signature Kernel and its gradients via variation of parameters. Supports both CPU and GPU.
          
@@ -52,7 +52,7 @@ class SigKernel(torch.autograd.Function):
             # Set the CUDA block size to be equal to the length of the longer sequence (equal to the size of the largest diagonal)
             compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc.detach()),
                                                                                        M, N, n_anti_diagonals,
-                                                                                       cuda.as_cuda_array(K))
+                                                                                       cuda.as_cuda_array(K), solver)
 
             K = K[:,:-1,:-1]
 
@@ -97,7 +97,7 @@ class SigKernel(torch.autograd.Function):
             # Compute signature kernel for reversed paths
             compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
                                                                                        M, N, n_anti_diagonals,
-                                                                                       cuda.as_cuda_array(K_rev))
+                                                                                       cuda.as_cuda_array(K_rev), solver)
 
             K_rev = K_rev[:,:-1,:-1]
 
@@ -114,7 +114,7 @@ class SigKernel(torch.autograd.Function):
         # if on CPU
         else:
 
-            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0)
+            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver)
             K_rev = torch.tensor(K_rev, dtype=X.dtype)
 
             inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                           # (A,N-1,D)  increments defined by the data
@@ -136,7 +136,7 @@ class SigKernel(torch.autograd.Function):
 
         grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D), dtype=X.dtype, device=X.device)], dim=1) + torch.cat([torch.zeros((A, 1, D), dtype=X.dtype, device=X.device), grad_incr], dim=1)
 
-        return grad_output[:,None,None]*grad_points, None
+        return grad_output[:,None,None]*grad_points, None, None
 # ===========================================================================================================
 
 
@@ -146,7 +146,7 @@ class SigKernel(torch.autograd.Function):
 class SigKernelGramMat(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, X, Y, sym=False):
+    def forward(ctx, X, Y, solver=0, sym=False):
 
         A = X.shape[0]
         B = Y.shape[0]
@@ -173,12 +173,12 @@ class SigKernelGramMat(torch.autograd.Function):
             blockspergrid = (A,B)
             compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(M_inc.detach()),
                                                                                                       M, N, n_anti_diagonals,
-                                                                                                      cuda.as_cuda_array(G))
+                                                                                                      cuda.as_cuda_array(G), solver)
 
             G = G[:,:,:-1,:-1]
 
         else:
-            G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=0, sym=sym, full=True)
+            G = sig_kernel_Gram_matrix(X.detach().numpy(), Y.detach().numpy(), n=n, solver=solver, sym=sym, full=True)
             G = torch.tensor(G, dtype=X.dtype)
 
         ctx.save_for_backward(X,Y,G)
@@ -221,7 +221,7 @@ class SigKernelGramMat(torch.autograd.Function):
             blockspergrid = (A,B)
             compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
                                                                                                       M, N, n_anti_diagonals,
-                                                                                                      cuda.as_cuda_array(G_rev))
+                                                                                                      cuda.as_cuda_array(G_rev), solver)
 
             G_rev = G_rev[:,:,:-1,:-1]
 
@@ -238,7 +238,7 @@ class SigKernelGramMat(torch.autograd.Function):
         # if on CPU
         else:
 
-            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=0, sym=sym, full=True)
+            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, sym=sym, full=True)
             G_rev = torch.tensor(G_rev, dtype=X.dtype)
 
             inc_Y = (Y[:,1:,:]-Y[:,:-1,:])/float(2**n)                          # (B,N-1,D)  increments defined by the data
@@ -259,10 +259,10 @@ class SigKernelGramMat(torch.autograd.Function):
 
         if sym:
             grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
-            return grad, None, None  
+            return grad, None, None, None
         else:
             grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
-            return grad, None, None
+            return grad, None, None, None
 # ===========================================================================================================
 
 

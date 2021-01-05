@@ -3,7 +3,7 @@ from numba import cuda
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol):
+def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=0):
     """
     We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
     M_inc: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
@@ -34,10 +34,12 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
             inc = M_inc[block_id, i-1, j-1]
 
             # vanilla scheme
-            M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(inc-1.)
+            if solver==0:
+                M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(inc-1.)
 
             # explicit scheme
-            #M_sol[block_id, i, j] = (M_sol[block_id, i-1, j]+M_sol[block_id, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id, i-1, j-1]*(1.-(1./12)*inc**2)
+            else:
+                M_sol[block_id, i, j] = (M_sol[block_id, i-1, j]+M_sol[block_id, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id, i-1, j-1]*(1.-(1./12)*inc**2)
 
         # Wait for other threads in this block
         cuda.syncthreads()
@@ -45,7 +47,7 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol):
+def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=0):
 
     block_id_x = cuda.blockIdx.x
     block_id_y = cuda.blockIdx.y
@@ -71,10 +73,12 @@ def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y,
             inc = M_inc[block_id_x, block_id_y, i-1, j-1]
 
             # vanilla scheme
-            M_sol[block_id_x, block_id_y, i, j] = M_sol[block_id_x, block_id_y, i-1, j] + M_sol[block_id_x, block_id_y, i, j-1] + M_sol[block_id_x, block_id_y, i-1, j-1]*(inc-1.)
+            if solver==0:
+                M_sol[block_id_x, block_id_y, i, j] = M_sol[block_id_x, block_id_y, i-1, j] + M_sol[block_id_x, block_id_y, i, j-1] + M_sol[block_id_x, block_id_y, i-1, j-1]*(inc-1.)
 
             # explicit scheme
-            #M_sol[block_id_x, block_id_y, i, j] = (M_sol[block_id_x, block_id_y, i-1, j]+M_sol[block_id_x, block_id_y, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id_x, block_id_y, i-1, j-1]*(1.-(1./12)*inc**2)
+            else:
+                M_sol[block_id_x, block_id_y, i, j] = (M_sol[block_id_x, block_id_y, i-1, j]+M_sol[block_id_x, block_id_y, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id_x, block_id_y, i-1, j-1]*(1.-(1./12)*inc**2)
 
         # Wait for other threads in this block
         cuda.syncthreads()
