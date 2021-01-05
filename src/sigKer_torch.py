@@ -63,6 +63,7 @@ class SigKernel(torch.autograd.Function):
             K = torch.tensor(K, dtype=X.dtype)
 
         ctx.save_for_backward(X,Y,K)
+        ctx.solver = solver
 
         return K[:,-1,-1]
 
@@ -70,6 +71,8 @@ class SigKernel(torch.autograd.Function):
     def backward(ctx, grad_output):
     
         X, Y, K = ctx.saved_tensors
+        solver = ctx.solver
+
         A = X.shape[0]
         M = X.shape[1]
         N = Y.shape[1]
@@ -183,6 +186,7 @@ class SigKernelGramMat(torch.autograd.Function):
 
         ctx.save_for_backward(X,Y,G)
         ctx.sym = sym
+        ctx.solver = solver
 
         return G[:,:,-1,-1]
 
@@ -192,6 +196,8 @@ class SigKernelGramMat(torch.autograd.Function):
 
         X, Y, G = ctx.saved_tensors
         sym = ctx.sym
+        solver = ctx.solver
+
         A = X.shape[0]
         B = Y.shape[0]
         M = X.shape[1]
