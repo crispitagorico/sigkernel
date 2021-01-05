@@ -9,13 +9,14 @@ from sigKer_torch import SigKernel, SigKernel_naive
 # ===========================================================================================================
 class SigLoss(torch.nn.Module):
 
-    def __init__(self, n_chunks=1, solver=0):
+    def __init__(self, n=0, solver=0, n_chunks=1):
         super(SigLoss, self).__init__()
+        self.n = n
+        self.solver = solver
         self.n_chunks = n_chunks
-        self.solver=solver
         
     def sig_distance(self,x,y):
-        d = torch.mean( SigKernel.apply(x,x,self.solver)+ SigKernel.apply(y,y,self.solver)- 2.*SigKernel.apply(x,y,self.solver) )
+        d = torch.mean( SigKernel.apply(x,x,self.n,self.solver)+ SigKernel.apply(y,y,self.n,self.solver)- 2.*SigKernel.apply(x,y,self.n,self.solver) )
         return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
 
     def forward(self, X, Y):
