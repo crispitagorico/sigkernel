@@ -189,7 +189,7 @@ class SigKernelGramMat(torch.autograd.Function):
             M_inc = torch.einsum('ipk,jqk->ijpq', inc_X, inc_Y)
 
             # cuda parameters
-            threads_per_block = max(MM,NN)
+            threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Prepare the tensor of output solutions to the PDE (forward)
@@ -200,7 +200,7 @@ class SigKernelGramMat(torch.autograd.Function):
             # Run the CUDA kernel.
             blockspergrid = (A,B)
             compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(M_inc.detach()),
-                                                                                                      MM, NN, n_anti_diagonals,
+                                                                                                      MM+1, NN+1, n_anti_diagonals,
                                                                                                       cuda.as_cuda_array(G), solver)
 
             G = G[:,:,:-1,:-1]
@@ -258,13 +258,13 @@ class SigKernelGramMat(torch.autograd.Function):
             G_rev[:,:,:,0] = 1. 
 
             # cuda parameters
-            threads_per_block = max(MM,NN)
+            threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Compute signature kernel for reversed paths
             blockspergrid = (A,B)
             compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
-                                                                                                      MM, NN, n_anti_diagonals,
+                                                                                                      MM+1, NN+1, n_anti_diagonals,
                                                                                                       cuda.as_cuda_array(G_rev), solver)
 
             G_rev = G_rev[:,:,:-1,:-1]
