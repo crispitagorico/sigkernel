@@ -16,8 +16,14 @@ class SigLoss(torch.nn.Module):
         self.n_chunks = n_chunks
         
     def sig_distance(self,x,y):
-        d = torch.mean( SigKernel.apply(x,x,self.n,self.solver)+ SigKernel.apply(y,y,self.n,self.solver)- 2.*SigKernel.apply(x,y,self.n,self.solver) )
-        return d #+ torch.mean((x[:,0,:]-y[:,0,:])**2) #+ torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
+
+        k_xx = SigKernel.apply(x,x,self.n,self.solver)
+        k_yy = SigKernel.apply(y,y,self.n,self.solver)
+        k_xy = SigKernel.apply(x,y,self.n,self.solver)
+
+        dist = torch.mean(k_xx) + torch.mean(k_yy) - 2.*torch.mean(k_xy) 
+
+        return torch.mean((x[:,0,:]-y[:,0,:])**2) + dist
 
     def forward(self, X, Y):
 
@@ -26,6 +32,7 @@ class SigLoss(torch.nn.Module):
         if self.n_chunks==1:
             return self.sig_distance(X,Y)
 
+        # "dyadic" partitioning
         dist = torch.tensor(0., dtype=torch.float64)
         for k in range(2, self.n_chunks+1):
             X_chunks = torch.chunk(X, k, dim=1)
@@ -49,14 +56,21 @@ class SigLoss_naive(torch.nn.Module):
         self.n_chunks = n_chunks
 
     def sig_distance(self,x,y):
-        d = torch.mean( SigKernel_naive(x,x,self.n,self.solver)+ SigKernel_naive(y,y,self.n,self.solver) - 2.*SigKernel_naive(x,y,self.n,self.solver) ) 
-        return d #+ torch.mean(torch.abs(x[:,0,:]-y[:,0,:])) + torch.mean(torch.abs(x[:,-1,:]-y[:,-1,:]))
+
+        k_xx = SigKernel_naive.apply(x,x,self.n,self.solver)
+        k_yy = SigKernel_naive.apply(y,y,self.n,self.solver)
+        k_xy = SigKernel_naive.apply(x,y,self.n,self.solver)
+
+        dist = torch.mean(k_xx) + torch.mean(k_yy) - 2.*torch.mean(k_xy)
+
+        return torch.mean((x[:,0,:]-y[:,0,:])**2) + dist
 
     def forward(self, X, Y):
 
         if self.n_chunks==1:
             return self.sig_distance(X,Y)
 
+        # "dyadic" partitioning
         dist = torch.tensor(0., dtype=torch.float64)
         for k in range(2, self.n_chunks+1):
             X_chunks = torch.chunk(X, k, dim=1)

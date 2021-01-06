@@ -19,13 +19,12 @@ class SigMMD(torch.nn.Module):
         assert not Y.requires_grad, "the second input should not require grad"
 
         K_XX = SigKernelGramMat.apply(X,X,self.n,self.solver,True)
-        
         K_YY = SigKernelGramMat.apply(Y,Y,self.n,self.solver,True)
-
         K_XY = SigKernelGramMat.apply(X,Y,self.n,self.solver,False)
 
-        MMD_squared = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
-        return MMD_squared
+        dist = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
+
+        return  torch.mean((X[:,0,:]-Y[:,0,:])**2) + dist
 
 
 # =========================================================================================================================================
@@ -39,7 +38,11 @@ class SigMMD_naive(torch.nn.Module):
         self.solver = solver
 
     def forward(self, X, Y):
+
         K_XX = SigKernelGramMat_naive(X,X,self.n,self.solver)
         K_YY = SigKernelGramMat_naive(Y,Y,self.n,self.solver)    
         K_XY = SigKernelGramMat_naive(X,Y,self.n,self.solver)
-        return torch.mean(K_XX)+torch.mean(K_YY)-2.*torch.mean(K_XY)
+        
+        dist = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY) 
+
+        return torch.mean((X[:,0,:]-Y[:,0,:])**2) + dist
