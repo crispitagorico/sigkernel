@@ -27,6 +27,31 @@ class SigMMD(torch.nn.Module):
         return  torch.mean((X[:,0,:]-Y[:,0,:])**2) + dist
 
 
+def c_alpha(m, alpha):
+    K = 1.
+    return 4 * np.sqrt(-np.log(alpha) / m)
+    return (2 * K / m) * (1 + np.sqrt(-2 * np.log(alpha))) ** 2
+
+
+def hypothesis_test(y_pred, y_test, confidence_level=0.99, n=5, solver=1):
+    """Statistical test based on MMD distance to determine if 
+       two sets of paths come from the same distribution.
+    """
+
+    m = max(y_pred.shape[0], y_test.shape[0])
+    
+    dist = SigMMD(n=n, solver=solver)
+
+    TU = dist(y_pred, y_test)
+    
+    c = torch.tensor(c_alpha(m, confidence_level), dtype=y_pred.dtype)
+
+    if TU > c:
+        print(f'Hypothesis rejected: distribution are not equal with {confidence_level*100}% confidence')
+    else:
+        print(f'Hypothesis accepted: distribution are equal with {confidence_level*100}% confidence')
+
+
 # =========================================================================================================================================
 # Naive implementation of MMD distance with gradients ontain via pytorch automatic differentiation (slow, just for testing)
 # =========================================================================================================================================
