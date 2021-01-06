@@ -1,5 +1,6 @@
 import torch.cuda
 from numba import cuda
+import math
 
 # ===========================================================================================================
 @cuda.jit
@@ -33,13 +34,22 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
 
             inc = M_inc[block_id, i-1, j-1]
 
+            k_01 = M_sol[block_id, i-1, j]
+            k_10 = M_sol[block_id, i, j-1]
+            k_00 = M_sol[block_id, i-1, j-1]
+
             # vanilla scheme
             if solver==0:
-                M_sol[block_id, i, j] = M_sol[block_id, i-1, j] + M_sol[block_id, i, j-1] + M_sol[block_id, i-1, j-1]*(inc-1.)
+                M_sol[block_id, i, j] = k_01 + k_10 + k_00*(inc-1.)
 
             # explicit scheme
+            elif solver==1:
+                M_sol[block_id, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
+            
+            # implicit scheme
             else:
-                M_sol[block_id, i, j] = (M_sol[block_id, i-1, j]+M_sol[block_id, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id, i-1, j-1]*(1.-(1./12)*inc**2)
+                #M_sol[block_id, i, j] = k_01+k_10-k_00 + ((0.5*inc)/(1.-0.25*inc))*(k_01+k_10)
+                M_sol[block_id, i, j] = k_01 + k_10 - k_00 + (math.exp(0.5*inc) - 1.)*(k_01 + k_10)
 
         # Wait for other threads in this block
         cuda.syncthreads()
@@ -72,13 +82,22 @@ def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y,
 
             inc = M_inc[block_id_x, block_id_y, i-1, j-1]
 
+            k_01 = M_sol[block_id_x, block_id_y, i-1, j]
+            k_10 = M_sol[block_id_x, block_id_y, i, j-1]
+            k_00 = M_sol[block_id_x, block_id_y, i-1, j-1]
+
             # vanilla scheme
             if solver==0:
-                M_sol[block_id_x, block_id_y, i, j] = M_sol[block_id_x, block_id_y, i-1, j] + M_sol[block_id_x, block_id_y, i, j-1] + M_sol[block_id_x, block_id_y, i-1, j-1]*(inc-1.)
+                M_sol[block_id_x, block_id_y, i, j] = k_01 + k_10 + k_00*(inc-1.)
 
             # explicit scheme
+            elif solver==1:
+                M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
+
+            # implicit scheme
             else:
-                M_sol[block_id_x, block_id_y, i, j] = (M_sol[block_id_x, block_id_y, i-1, j]+M_sol[block_id_x, block_id_y, i, j-1])*(1.+0.5*inc+(1./12)*inc**2) - M_sol[block_id_x, block_id_y, i-1, j-1]*(1.-(1./12)*inc**2)
+                #M_sol[block_id_x, block_id_y, i, j] = k_01+k_10-k_00 + ((0.5*inc)/(1.-0.25*inc))*(k_01+k_10)
+                M_sol[block_id_x, block_id_y, i, j] = k_01 + k_10 - k_00 + (math.exp(0.5*inc) - 1.)*(k_01 + k_10)
 
         # Wait for other threads in this block
         cuda.syncthreads()

@@ -133,7 +133,7 @@ class SigKernel(torch.autograd.Function):
 
         grad_incr = KK[:,:,:,None]*inc_Y[:,None,:,:]                         # (A,(2**n)*(M-1),(2**n)*(N-1),D)
 
-        grad_incr = (1./(2**n))*torch.sum(grad_incr,axis=2)                  # (A,(2**n)*(M-1),D)
+        grad_incr = torch.sum(grad_incr,axis=2)/float(2**n)                  # (A,(2**n)*(M-1),D)
 
         grad_incr =  torch.sum(grad_incr.reshape(A,M-1,2**n,D),axis=2)       # (A,M-1,D)
 
@@ -334,8 +334,11 @@ def SigKernel_naive(X,Y,n=0,solver=0):
 
             if solver==0:
                 K_XY[:, i + 1, j + 1] = k_10 + k_01 + k_00*(increment-1.)
-            else:
+            elif solver==1:
                 K_XY[:, i + 1, j + 1] = (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
+            else:
+                #K_XY[:, i + 1, j + 1] = k_01+k_10-k_00 + ((0.5*inc)/(1.-0.25*increment))*(k_01+k_10)
+                K_XY[:, i + 1, j + 1] = k_01 + k_10 - k_00 + (torch.exp(0.5*increment) - 1.)*(k_01 + k_10)
             
     return K_XY[:, -1, -1]
 # ===========================================================================================================
@@ -372,7 +375,10 @@ def SigKernelGramMat_naive(X,Y,n=0,solver=0):
 
             if solver==0:
                 K_XY[:, :, i + 1, j + 1] = k_10 + k_01 + k_00*(increment-1.)
-            else:
+            elif solver==1:
                 K_XY[:, :, i + 1, j + 1] = (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
+            else:
+                #K_XY[:, :, i + 1, j + 1] = k_01+k_10-k_00 + ((0.5*inc)/(1.-0.25*increment))*(k_01+k_10)
+                K_XY[:, :, i + 1, j + 1] = k_01 + k_10 - k_00 + (torch.exp(0.5*increment) - 1.)*(k_01 + k_10)
 
     return K_XY[:,:, -1, -1]

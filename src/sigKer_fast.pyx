@@ -1,7 +1,9 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 
+from libc.math cimport exp
 import numpy as np
+
 
 def forward_step(double k_00, double k_01, double k_10, double increment):
 	return k_10 + k_01 + k_00*(increment-1.)
@@ -10,7 +12,8 @@ def forward_step_explicit(double k_00, double k_01, double k_10, double incremen
 	return (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
 
 def forward_step_implicit(double k_00, double k_01, double k_10, double increment):
-	return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10)
+	# return k_01+k_10-k_00 + ((0.5*increment)/(1.-0.25*increment))*(k_01+k_10)
+	return k_01+k_10-k_00 + (exp(0.5*increment)-1.)*(k_01+k_10)
 
 
 def sig_kernel(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint full=False):
