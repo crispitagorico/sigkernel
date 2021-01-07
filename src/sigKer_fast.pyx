@@ -4,6 +4,8 @@
 from libc.math cimport exp
 import numpy as np
 
+#from cython.parallel import prange
+
 
 def forward_step(double k_00, double k_01, double k_10, double increment):
 	return k_10 + k_01 + k_00*(increment-1.)
@@ -112,7 +114,7 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 
 						increment = 0.
 						for k in range(D):
-							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
+							increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 						
 						if solver==0:
 							K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
@@ -141,7 +143,7 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 
 						increment = 0.
 						for k in range(D):
-							increment += (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
+							increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
 	
 						if solver==0:
 							K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
@@ -198,6 +200,13 @@ def sig_kernel_batch_varpar(double[:,:,:] x, double[:,:,:] y, int n=0, int solve
 					K[l,i+1,j+1] = forward_step(K[l,i,j], K[l,i,j+1], K[l,i+1,j], increment)
 
 	return np.array(K)
+
+
+
+
+
+
+
 
 
 
