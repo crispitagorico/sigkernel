@@ -28,9 +28,7 @@ class SigMMD(torch.nn.Module):
 
 
 def c_alpha(m, alpha):
-    K = 1.
-    return 4 * np.sqrt(-np.log(alpha) / m)
-    return (2 * K / m) * (1 + np.sqrt(-2 * np.log(alpha))) ** 2
+    return 4. * np.sqrt(-np.log(alpha) / m)
 
 
 def hypothesis_test(y_pred, y_test, confidence_level=0.99, n=5, solver=1):
