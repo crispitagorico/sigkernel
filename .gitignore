@@ -261,3 +261,5 @@ __pycache__/
 *.pyc
 /Multivariate2018_arff/Multivariate_arff
 /data/gemini_BTCUSD_2020_1min.csv
+/data/AppliancesEnergy_TEST.ts
+/data/AppliancesEnergy_TRAIN.ts
