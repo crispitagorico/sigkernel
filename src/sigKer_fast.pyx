@@ -4,7 +4,7 @@
 from libc.math cimport exp
 import numpy as np
 
-#from cython.parallel import prange
+from cython.parallel import prange
 
 
 def forward_step(double k_00, double k_01, double k_10, double increment):
@@ -18,13 +18,14 @@ def forward_step_implicit(double k_00, double k_01, double k_10, double incremen
 	return k_01+k_10-k_00 + (exp(0.5*increment)-1.)*(k_01+k_10)
 
 
-def sig_kernel(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint full=False):
+def sig_kernel(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint full=False, bint rbf=False, double sigma=1.):
 
 	cdef int M = x.shape[0]
 	cdef int N = y.shape[0]
 	cdef int D = x.shape[1]
 
 	cdef double increment
+	cdef double d1, d2, d3, d4 
 	cdef double factor = 2**(2*n)
 
 	cdef int i, j, k, l, ii, jj
@@ -47,8 +48,24 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint full=Fa
 			jj = int(j/(2**n))
 
 			increment = 0.
+			d1 = 0.
+			d2 = 0.
+			d3 = 0.
+			d4 = 0.
 			for k in range(D):
-				increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])/factor 
+
+				if rbf:
+					d1 = d1 + (x[ii+1,k]-y[jj+1,k])**2
+					d2 = d2 + (x[ii+1,k]-y[jj,k])**2
+					d3 = d3 + (x[ii,k]-y[jj+1,k])**2
+					d4 = d4 + (x[ii,k]-y[jj,k])**2
+				else:
+					increment = increment + (x[ii+1,k]-x[ii,k])*(y[jj+1,k]-y[jj,k])
+
+			if rbf:
+				increment = ( exp(d1/sigma) - exp(d2/sigma) - exp(d3/sigma) + exp(d4/sigma) )/factor
+			else:
+				increment = increment/factor
 
 			if solver==0:
 				K[i+1,j+1] = forward_step(K[i,j], K[i,j+1], K[i+1,j], increment)
@@ -63,21 +80,21 @@ def sig_kernel(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint full=Fa
 		return K[MM,NN]
 
 
-def sig_distance(double[:,:] x, double[:,:] y, int n=0, int solver=0):
-	cdef double a = sig_kernel(x,x,n,solver)
-	cdef double b = sig_kernel(y,y,n,solver)
-	cdef double c = sig_kernel(x,y,n,solver)
+def sig_distance(double[:,:] x, double[:,:] y, int n=0, int solver=0, bint rbf=False, double sigma=1.):
+	cdef double a = sig_kernel(x,x,n,solver,False,rbf,sigma)
+	cdef double b = sig_kernel(y,y,n,solver,False,rbf,sigma)
+	cdef double c = sig_kernel(x,y,n,solver,False,rbf,sigma)
 	return a + b - 2.*c
 
 
-def mmd_distance(double[:,:,:] x, double[:,:,:] y, int n=0):
-	cdef double[:,:] K_XX = sig_kernel_Gram_matrix(x,x,n,sym=True)
-	cdef double[:,:] K_YY = sig_kernel_Gram_matrix(y,y,n,sym=True)
-	cdef double[:,:] K_XY = sig_kernel_Gram_matrix(x,y,n,sym=False)
-	return (np.mean(K_XX) + np.mean(K_YY) - 2.*np.mean(K_XY))**(0.5)
+def mmd_distance(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint rbf=False, double sigma=1.):
+	cdef double[:,:] K_XX = sig_kernel_Gram_matrix(x,x,n,solver,True,False,rbf,sigma)
+	cdef double[:,:] K_YY = sig_kernel_Gram_matrix(y,y,n,solver,True,False,rbf,sigma)
+	cdef double[:,:] K_XY = sig_kernel_Gram_matrix(x,y,n,solver,False,False,rbf,sigma)
+	return np.mean(K_XX) + np.mean(K_YY) - 2.*np.mean(K_XY)
 
 
-def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint sym=False, bint full=False):
+def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint sym=False, bint full=False, bint rbf=False, double sigma=1.):
 
 	cdef int A = x.shape[0]
 	cdef int B = y.shape[0]
@@ -86,6 +103,7 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 	cdef int D = x.shape[2]
 
 	cdef double increment
+	cdef double d1, d2, d3, d4 
 	cdef double factor = 2**(2*n)
 
 	cdef int i, j, k, l, m, ii, jj
@@ -95,7 +113,7 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 	cdef double[:,:,:,:] K = np.zeros((A,B,MM+1,NN+1), dtype=np.float64)
 
 	if sym:
-		for l in range(A):
+		for l in prange(A,nogil=True):
 			for m in range(l,A):
 
 				for i in range(MM+1):
@@ -113,20 +131,36 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 						jj = int(j/(2**n))
 
 						increment = 0.
+						d1 = 0.
+						d2 = 0.
+						d3 = 0.
+						d4 = 0.
 						for k in range(D):
-							increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
-						
-						if solver==0:
-							K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
-						elif solver==1:
-							K[l,m,i+1,j+1] = forward_step_explicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+
+							if rbf:
+								d1 = d1 + (x[l,ii+1,k]-y[m,jj+1,k])**2
+								d2 = d2 + (x[l,ii+1,k]-y[m,jj,k])**2
+								d3 = d3 + (x[l,ii,k]-y[m,jj+1,k])**2
+								d4 = d4 + (x[l,ii,k]-y[m,jj,k])**2
+							else:
+								increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])
+
+						if rbf:
+							increment = ( exp(d1/sigma) - exp(d2/sigma) - exp(d3/sigma) + exp(d4/sigma) )/factor
 						else:
-							K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+							increment = increment/factor
+
+						if solver==0:
+							K[l,m,i+1,j+1] = K[l,m,i+1,j] + K[l,m,i,j+1] + K[l,m,i,j]*(increment-1.)
+						elif solver==1:
+							K[l,m,i+1,j+1] = (K[l,m,i+1,j] + K[l,m,i,j+1])*(1.+0.5*increment+(1./12)*increment**2) - K[l,m,i,j]*(1.-(1./12)*increment**2)
+						else:
+							K[l,m,i+1,j+1] = K[l,m,i+1,j] + K[l,m,i,j+1] - K[l,m,i,j] + (exp(0.5*increment)-1.)*(K[l,m,i+1,j] + K[l,m,i,j+1])
 
 						K[m,l,j+1,i+1] = K[l,m,i+1,j+1]
 
 	else:
-		for l in range(A):
+		for l in prange(A,nogil=True):
 			for m in range(B):
 
 				for i in range(MM+1):
@@ -142,15 +176,31 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 						jj = int(j/(2**n))
 
 						increment = 0.
+						d1 = 0.
+						d2 = 0.
+						d3 = 0.
+						d4 = 0.
 						for k in range(D):
-							increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])/factor
-	
-						if solver==0:
-							K[l,m,i+1,j+1] = forward_step(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
-						elif solver==1:
-							K[l,m,i+1,j+1] = forward_step_explicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+
+							if rbf:
+								d1 = d1 + (x[l,ii+1,k]-y[m,jj+1,k])**2
+								d2 = d2 + (x[l,ii+1,k]-y[m,jj,k])**2
+								d3 = d3 + (x[l,ii,k]-y[m,jj+1,k])**2
+								d4 = d4 + (x[l,ii,k]-y[m,jj,k])**2
+							else:
+								increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[m,jj+1,k]-y[m,jj,k])
+
+						if rbf:
+							increment = ( exp(d1/sigma) - exp(d2/sigma) - exp(d3/sigma) + exp(d4/sigma) )/factor
 						else:
-							K[l,m,i+1,j+1] = forward_step_implicit(K[l,m,i,j], K[l,m,i,j+1], K[l,m,i+1,j], increment)
+							increment = increment/factor
+
+						if solver==0:
+							K[l,m,i+1,j+1] = K[l,m,i+1,j] + K[l,m,i,j+1] + K[l,m,i,j]*(increment - 1.)
+						elif solver==1:
+							K[l,m,i+1,j+1] = (K[l,m,i+1,j] + K[l,m,i,j+1])*(1. + 0.5*increment+(1./12)*increment**2) - K[l,m,i,j]*(1. - (1./12)*increment**2)
+						else:
+							K[l,m,i+1,j+1] = K[l,m,i+1,j] + K[l,m,i,j+1] - K[l,m,i,j] + (exp(0.5*increment)-1.)*(K[l,m,i+1,j] + K[l,m,i,j+1])
 	
 	if full:
 		return np.array(K)
