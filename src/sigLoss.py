@@ -32,7 +32,7 @@ class SigLoss(torch.nn.Module):
         assert not Y.requires_grad, "the second input should not require grad"
 
         if X.requires_grad:
-            assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
+            assert not self.rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
 
 
         if self.n_chunks==1:

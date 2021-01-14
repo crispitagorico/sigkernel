@@ -242,12 +242,7 @@ class SigKernelGramMat(torch.autograd.Function):
             G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, sym=sym, full=True, rbf=False, sigma=None)
             G_rev = torch.tensor(G_rev, dtype=X.dtype)
 
-        inc_Y = Y[:,1:,:]-Y[:,:-1,:]
-
-        if rbf:
-            inc_Y = torch.exp(-(1.-inc_Y)**2/sigma)
-
-        inc_Y = tile(inc_Y,1,2**n)/float(2**n)                              # (B,(2**n)*(N-1),D)  increments on the finer grid
+        inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)               # (B,(2**n)*(N-1),D)  increments on the finer grid
 
         G_rev = flip(flip(G_rev,dim=2),dim=3)
 
@@ -336,7 +331,7 @@ def SigKernel_naive(X,Y,n=0,solver=0,rbf=False,sigma=1.):
     M = X[0].shape[0]
     N = Y[0].shape[0]
 
-    K_XY = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
+    K_XY = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1), dtype=X.dtype, device=X.device)
     K_XY[:, 0, :] = 1.
     K_XY[:, :, 0] = 1.
 
@@ -373,7 +368,7 @@ def SigKernelGramMat_naive(X,Y,n=0,solver=0,rbf=False,sigma=1.):
     M = X[0].shape[0]
     N = Y[0].shape[0]
 
-    K_XY = torch.zeros((A,B, (2**n)*(M-1)+1, (2**n)*(N-1)+1)).type(torch.float64)
+    K_XY = torch.zeros((A,B, (2**n)*(M-1)+1, (2**n)*(N-1)+1), dtype=X.dtype, device=X.device)
     K_XY[:,:, 0, :] = 1.
     K_XY[:,:, :, 0] = 1.
 
