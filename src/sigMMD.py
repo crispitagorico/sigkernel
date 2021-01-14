@@ -9,18 +9,20 @@ from sigKer_torch import SigKernelGramMat, SigKernelGramMat_naive
 # =========================================================================================================================================
 class SigMMD(torch.nn.Module):
 
-    def __init__(self, n=0, solver=0):
+    def __init__(self, n=0, solver=0, rbf=False, sigma=1.):
         super(SigMMD, self).__init__()
         self.n = n
         self.solver = solver
+        self.rbf = rbf
+        self.sigma = sigma
 
     def forward(self, X, Y):
 
         assert not Y.requires_grad, "the second input should not require grad"
 
-        K_XX = SigKernelGramMat.apply(X,X,self.n,self.solver,True)
-        K_YY = SigKernelGramMat.apply(Y,Y,self.n,self.solver,True)
-        K_XY = SigKernelGramMat.apply(X,Y,self.n,self.solver,False)
+        K_XX = SigKernelGramMat.apply(X,X,self.n,self.solver,True,self.rbf,self.sigma)
+        K_YY = SigKernelGramMat.apply(Y,Y,self.n,self.solver,True,self.rbf,self.sigma)
+        K_XY = SigKernelGramMat.apply(X,Y,self.n,self.solver,False,self.rbf,self.sigma)
 
         dist = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
 
@@ -31,14 +33,14 @@ def c_alpha(m, alpha):
     return 4. * np.sqrt(-np.log(alpha) / m)
 
 
-def hypothesis_test(y_pred, y_test, confidence_level=0.99, n=5, solver=1):
+def hypothesis_test(y_pred, y_test, confidence_level=0.99, n=5, solver=1, rbf=False, sigma=1.):
     """Statistical test based on MMD distance to determine if 
        two sets of paths come from the same distribution.
     """
 
     m = max(y_pred.shape[0], y_test.shape[0])
     
-    dist = SigMMD(n=n, solver=solver)
+    dist = SigMMD(n=n, solver=solver, rbf=rbf, sigma=sigma)
 
     TU = dist(y_pred, y_test)
     
@@ -55,16 +57,18 @@ def hypothesis_test(y_pred, y_test, confidence_level=0.99, n=5, solver=1):
 # =========================================================================================================================================
 class SigMMD_naive(torch.nn.Module):
 
-    def __init__(self, n=0, solver=0):
+    def __init__(self, n=0, solver=0, rbf=False, sigma=1.):
         super(SigMMD_naive, self).__init__()
         self.n = n
         self.solver = solver
+        self.rbf = rbf
+        self.sigma = sigma
 
     def forward(self, X, Y):
 
-        K_XX = SigKernelGramMat_naive(X,X,self.n,self.solver)
-        K_YY = SigKernelGramMat_naive(Y,Y,self.n,self.solver)    
-        K_XY = SigKernelGramMat_naive(X,Y,self.n,self.solver)
+        K_XX = SigKernelGramMat_naive(X,X,self.n,self.solver,self.rbf,self.sigma)
+        K_YY = SigKernelGramMat_naive(Y,Y,self.n,self.solver,self.rbf,self.sigma)    
+        K_XY = SigKernelGramMat_naive(X,Y,self.n,self.solver,self.rbf,self.sigma)
         
         dist = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY) 
 

@@ -9,17 +9,19 @@ from sigKer_torch import SigKernel, SigKernel_naive
 # ===========================================================================================================
 class SigLoss(torch.nn.Module):
 
-    def __init__(self, n=0, solver=0, n_chunks=1):
+    def __init__(self, n=0, solver=0, rbf=False, sigma=1., n_chunks=1):
         super(SigLoss, self).__init__()
         self.n = n
         self.solver = solver
+        self.rbf = rbf
+        self.sigma = sigma
         self.n_chunks = n_chunks
         
     def sig_distance(self,x,y):
 
-        k_xx = SigKernel.apply(x,x,self.n,self.solver)
-        k_yy = SigKernel.apply(y,y,self.n,self.solver)
-        k_xy = SigKernel.apply(x,y,self.n,self.solver)
+        k_xx = SigKernel.apply(x,x,self.n,self.solver,self.rbf,self.sigma)
+        k_yy = SigKernel.apply(y,y,self.n,self.solver,self.rbf,self.sigma)
+        k_xy = SigKernel.apply(x,y,self.n,self.solver,self.rbf,self.sigma)
 
         dist = torch.mean(k_xx) + torch.mean(k_yy) - 2.*torch.mean(k_xy) 
 
@@ -49,17 +51,19 @@ class SigLoss(torch.nn.Module):
 # ===========================================================================================================
 class SigLoss_naive(torch.nn.Module):
 
-    def __init__(self, n=0, solver=0, n_chunks=1):
+    def __init__(self, n=0, solver=0, rbf=False, sigma=1., n_chunks=1):
         super(SigLoss_naive, self).__init__()
         self.n = n
         self.solver = solver
+        self.rbf = rbf
+        self.sigma = sigma
         self.n_chunks = n_chunks
 
     def sig_distance(self,x,y):
 
-        k_xx = SigKernel_naive.apply(x,x,self.n,self.solver)
-        k_yy = SigKernel_naive.apply(y,y,self.n,self.solver)
-        k_xy = SigKernel_naive.apply(x,y,self.n,self.solver)
+        k_xx = SigKernel_naive.apply(x,x,self.n,self.solver,self.rbf,self.sigma)
+        k_yy = SigKernel_naive.apply(y,y,self.n,self.solver,self.rbf,self.sigma)
+        k_xy = SigKernel_naive.apply(x,y,self.n,self.solver,self.rbf,self.sigma)
 
         dist = torch.mean(k_xx) + torch.mean(k_yy) - 2.*torch.mean(k_xy)
 

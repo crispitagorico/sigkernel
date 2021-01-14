@@ -1,0 +1,7 @@
+,accuracy (%)
+sig-ker-PDE,0.7
+linear,0.4
+rbf,0.4
+gak,0.3
+sig-ker-1,0.4
+sig-ker-2,0.5
