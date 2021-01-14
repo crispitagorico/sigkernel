@@ -30,6 +30,9 @@ class SigKernel(torch.autograd.Function):
         MM = (2**n)*(M-1)
         NN = (2**n)*(N-1)
 
+        if X.requires_grad:
+            assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
+
         # if on GPU
         if X.device.type=='cuda':
 
@@ -64,8 +67,6 @@ class SigKernel(torch.autograd.Function):
         ctx.save_for_backward(X,Y,K)
         ctx.n = n
         ctx.solver = solver
-        ctx.rbf = rbf
-        ctx.sigma = sigma
 
         return K[:,-1,-1]
 
@@ -75,8 +76,6 @@ class SigKernel(torch.autograd.Function):
         X, Y, K = ctx.saved_tensors
         n = ctx.n
         solver = ctx.solver
-        rbf = ctx.rbf
-        sigma = ctx.sigma
 
         A = X.shape[0]
         M = X.shape[1]
@@ -93,7 +92,7 @@ class SigKernel(torch.autograd.Function):
         # if on GPU
         if X.device.type=='cuda':
 
-            M_inc_rev = increment_matrix(X_rev,Y_rev,rbf,sigma,n)
+            M_inc_rev = increment_matrix(X_rev,Y_rev,rbf=False,sigma=None,n=n)
 
             # Prepare the tensor of output solutions to the PDE (backward)
             K_rev = torch.zeros((A, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
@@ -114,15 +113,11 @@ class SigKernel(torch.autograd.Function):
         # if on CPU
         else:
 
-            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, rbf=rbf, sigma=sigma)
+            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, rbf=False, sigma=None)
             K_rev = torch.tensor(K_rev, dtype=X.dtype)
 
-        inc_Y = Y[:,1:,:]-Y[:,:-1,:]                                         # (A,N-1,D)  increments defined by the data
-
-        if rbf:
-            inc_Y = torch.exp((1.-inc_Y)**2/sigma)
-
-        inc_Y = tile(inc_Y,1,2**n)/float(2**n)                               # (A,(2**n)*(N-1),D)  increments on the finer grid
+        
+        inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(N-1),D)  increments on the finer grid
 
         K_rev = flip(flip(K_rev,dim=1),dim=2)
 
@@ -134,7 +129,6 @@ class SigKernel(torch.autograd.Function):
 
         grad_incr =  torch.sum(grad_incr.reshape(A,M-1,2**n,D),axis=2)       # (A,M-1,D)
 
-        
         if Y.requires_grad:
             grad_incr*=2
 
@@ -160,6 +154,9 @@ class SigKernelGramMat(torch.autograd.Function):
 
         MM = (2**n)*(M-1)
         NN = (2**n)*(N-1)
+
+        if X.requires_grad:
+            assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
 
         # if on GPU
         if X.device.type=='cuda':
@@ -193,8 +190,6 @@ class SigKernelGramMat(torch.autograd.Function):
         ctx.n = n
         ctx.solver = solver
         ctx.sym = sym
-        ctx.rbf = rbf
-        ctx.sigma = sigma
 
         return G[:,:,-1,-1]
 
@@ -206,8 +201,6 @@ class SigKernelGramMat(torch.autograd.Function):
         n = ctx.n
         solver = ctx.solver
         sym = ctx.sym
-        rbf = ctx.rbf
-        sigma = ctx.sigma
 
         A = X.shape[0]
         B = Y.shape[0]
@@ -225,7 +218,7 @@ class SigKernelGramMat(torch.autograd.Function):
         # if on GPU
         if X.device.type=='cuda':
 
-            M_inc_rev = increment_matrix_mmd(X_rev,Y_rev,rbf,sigma,n)
+            M_inc_rev = increment_matrix_mmd(X_rev,Y_rev,rbf=False,sigma=None,n=n)
 
             # Prepare the tensor of output solutions to the PDE (backward)
             G_rev = torch.zeros((A, B, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
@@ -246,13 +239,13 @@ class SigKernelGramMat(torch.autograd.Function):
 
         # if on CPU
         else:
-            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, sym=sym, full=True, rbf=rbf, sigma=sigma)
+            G_rev = sig_kernel_Gram_matrix(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, sym=sym, full=True, rbf=False, sigma=None)
             G_rev = torch.tensor(G_rev, dtype=X.dtype)
 
         inc_Y = Y[:,1:,:]-Y[:,:-1,:]
 
         if rbf:
-            inc_Y = torch.exp((1.-inc_Y)**2/sigma)
+            inc_Y = torch.exp(-(1.-inc_Y)**2/sigma)
 
         inc_Y = tile(inc_Y,1,2**n)/float(2**n)                              # (B,(2**n)*(N-1),D)  increments on the finer grid
 
@@ -352,17 +345,6 @@ def SigKernel_naive(X,Y,n=0,solver=0,rbf=False,sigma=1.):
     for i in range(0, (2**n)*(M-1)):
         for j in range(0, (2**n)*(N-1)):
 
-            #ii = int(i / (2 ** n))
-            #jj = int(j / (2 ** n))
-
-            #inc_X = X[:, ii + 1, :] - X[:, ii, :]
-            #inc_Y = Y[:, jj + 1, :] - Y[:, jj, :]
-
-            #inc_X = inc_X/float(2**n)  
-            #inc_Y = inc_Y/float(2**n)  
-
-            #increment = torch.einsum('ik,ik->i', inc_X, inc_Y).clone()  
-
             increment = M_inc[:,i,j].clone()
 
             k_10 = K_XY[:, i + 1, j].clone()
@@ -399,17 +381,6 @@ def SigKernelGramMat_naive(X,Y,n=0,solver=0,rbf=False,sigma=1.):
 
     for i in range(0, (2**n)*(M-1)):
         for j in range(0, (2**n)*(N-1)):
-
-            #ii = int(i / (2 ** n))
-            #jj = int(j / (2 ** n))
-
-            #inc_X = X[:, ii + 1, :] - X[:,ii, :]
-            #inc_Y = Y[:, jj + 1, :] - Y[:, jj, :]
-
-            #inc_X = inc_X/float(2**n)                                        
-            #inc_Y = inc_Y/float(2**n)            
-
-            #increment = torch.einsum('ik,jk->ij', inc_X, inc_Y).clone()  
 
             increment = M_inc[:,:,i,j].clone()
 
