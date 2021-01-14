@@ -34,20 +34,8 @@ class SigKernel(torch.autograd.Function):
         if X.device.type=='cuda':
 
             assert max(MM+1,NN+1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
-
-            # increments partitioning for PDE grid solver
-            inc_X = X[:,1:,:]-X[:,:-1,:]
-            inc_Y = Y[:,1:,:]-Y[:,:-1,:]
             
-            if rbf:
-                inc_X = torch.exp(-inc_X**2/sigma)
-                inc_Y = torch.exp(-inc_Y**2/sigma)
-
-            inc_X = tile(inc_X,1,2**n)/float(2**n)
-            inc_Y = tile(inc_Y,1,2**n)/float(2**n)
-
-            # Compute increment matrix
-            M_inc = torch.bmm(inc_X, inc_Y.permute(0,2,1))
+            M_inc = increment_matrix(X,Y,rbf,sigma,n)
             
             # cuda parameters
             threads_per_block = max(MM+1,NN+1)
@@ -105,21 +93,7 @@ class SigKernel(torch.autograd.Function):
         # if on GPU
         if X.device.type=='cuda':
 
-            # increments 
-            inc_X_rev = X_rev[:,1:,:]-X_rev[:,:-1,:]
-            inc_Y_rev = Y_rev[:,1:,:]-Y_rev[:,:-1,:]
-
-            # RBF state space kernel
-            if rbf:
-                inc_X_rev = torch.exp(-inc_X_rev**2/sigma)
-                inc_Y_rev = torch.exp(-inc_Y_rev**2/sigma)
-
-            # increments partitioning for PDE grid solver
-            inc_X_rev = tile(inc_X_rev,1,2**n)/float(2**n)
-            inc_Y_rev = tile(inc_Y_rev,1,2**n)/float(2**n)
-
-            # Compute reversed increment matrix
-            M_inc_rev = torch.bmm(inc_X_rev, inc_Y_rev.permute(0,2,1))
+            M_inc_rev = increment_matrix(X_rev,Y_rev,rbf,sigma,n)
 
             # Prepare the tensor of output solutions to the PDE (backward)
             K_rev = torch.zeros((A, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
@@ -192,19 +166,7 @@ class SigKernelGramMat(torch.autograd.Function):
 
             assert max(MM,NN) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
-            # increments
-            inc_X = X[:,1:,:]-X[:,:-1,:]
-            inc_Y = Y[:,1:,:]-Y[:,:-1,:]
-
-            if rbf:
-                inc_X = torch.exp(-inc_X**2/sigma)
-                inc_Y = torch.exp(-inc_Y**2/sigma)
-
-            inc_X = tile(inc_X,1,2**n)/float(2**n)
-            inc_Y = tile(inc_Y,1,2**n)/float(2**n)
-
-            # Compute increment matrix
-            M_inc = torch.einsum('ipk,jqk->ijpq', inc_X, inc_Y)
+            M_inc = increment_matrix_mmd(X,Y,rbf,sigma,n)
 
             # cuda parameters
             threads_per_block = max(MM+1,NN+1)
@@ -231,8 +193,8 @@ class SigKernelGramMat(torch.autograd.Function):
         ctx.n = n
         ctx.solver = solver
         ctx.sym = sym
-        ctx.rbf
-        ctx.sigma
+        ctx.rbf = rbf
+        ctx.sigma = sigma
 
         return G[:,:,-1,-1]
 
@@ -263,20 +225,7 @@ class SigKernelGramMat(torch.autograd.Function):
         # if on GPU
         if X.device.type=='cuda':
 
-            # increments
-            inc_X_rev = X_rev[:,1:,:]-X_rev[:,:-1,:]
-            inc_Y_rev = Y_rev[:,1:,:]-Y_rev[:,:-1,:]
-
-            if rbf:
-                inc_X_rev = torch.exp(-inc_X_rev**2/sigma)
-                inc_Y_rev = torch.exp(-inc_Y_rev**2/sigma)
-
-            # increments partitioning for PDE grid solver
-            inc_X_rev = tile(inc_X_rev,1,2**n)/float(2**n)
-            inc_Y_rev = tile(inc_Y_rev,1,2**n)/float(2**n)
-
-            # Compute reversed increment matrix
-            M_inc_rev = torch.einsum('ipk,jqk->ijpq', inc_X_rev, inc_Y_rev)
+            M_inc_rev = increment_matrix_mmd(X_rev,Y_rev,rbf,sigma,n)
 
             # Prepare the tensor of output solutions to the PDE (backward)
             G_rev = torch.zeros((A, B, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
@@ -346,6 +295,43 @@ def tile(a, dim, n_tile):
     order_index = torch.LongTensor(np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).to(a.device)
     return torch.index_select(a, dim, order_index)
 # ===========================================================================================================
+def increment_matrix(X,Y,rbf,sigma,n):
+    A = X.shape[0]
+    M = X.shape[1]
+    N = Y.shape[1]
+    if rbf:
+        Xs = torch.sum(X**2, dim=2)
+        Ys = torch.sum(Y**2, dim=2)
+        dist = -2.*torch.bmm(X, Y.permute(0,2,1))
+        dist += torch.reshape(Xs,(A,M,1)) + torch.reshape(Ys,(A,1,N))
+        M_inc = torch.exp(-dist/sigma)
+        M_inc = M_inc[:,1:,1:] + M_inc[:,:-1,:-1] - M_inc[:,1:,:-1] - M_inc[:,:-1,1:] 
+        M_inc = tile(tile(M_inc,1,2**n)/float(2**n),2,2**n)/float(2**n)
+    else:
+        inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)
+        inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)
+        M_inc = torch.bmm(inc_X, inc_Y.permute(0,2,1))
+    return M_inc
+# ===========================================================================================================
+def increment_matrix_mmd(X,Y,rbf,sigma,n):
+    A = X.shape[0]
+    B = Y.shape[0]
+    M = X.shape[1]
+    N = Y.shape[1]
+    if rbf:
+        Xs = torch.sum(X**2, dim=2)
+        Ys = torch.sum(Y**2, dim=2)
+        dist = -2.*torch.einsum('ipk,jqk->ijpq', X, Y)
+        dist += torch.reshape(Xs,(A,1,M,1)) + torch.reshape(Ys,(1,B,1,N))
+        M_inc = torch.exp(-dist/sigma)
+        M_inc = M_inc[:,:,1:,1:] + M_inc[:,:,:-1,:-1] - M_inc[:,:,1:,:-1] - M_inc[:,:,:-1,1:] 
+        M_inc = tile(tile(M_inc,2,2**n)/float(2**n),3,2**n)/float(2**n)
+    else:
+        inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)
+        inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)
+        M_inc = torch.einsum('ipk,jqk->ijpq', inc_X, inc_Y)
+    return M_inc
+# ===========================================================================================================
 
 
 # ===========================================================================================================
@@ -361,23 +347,23 @@ def SigKernel_naive(X,Y,n=0,solver=0,rbf=False,sigma=1.):
     K_XY[:, 0, :] = 1.
     K_XY[:, :, 0] = 1.
 
+    M_inc = increment_matrix(X,Y,rbf,sigma,n)
+
     for i in range(0, (2**n)*(M-1)):
         for j in range(0, (2**n)*(N-1)):
 
-            ii = int(i / (2 ** n))
-            jj = int(j / (2 ** n))
+            #ii = int(i / (2 ** n))
+            #jj = int(j / (2 ** n))
 
-            inc_X = X[:, ii + 1, :] - X[:, ii, :]
-            inc_Y = Y[:, jj + 1, :] - Y[:, jj, :]
+            #inc_X = X[:, ii + 1, :] - X[:, ii, :]
+            #inc_Y = Y[:, jj + 1, :] - Y[:, jj, :]
 
-            if rbf:
-                inc_X = torch.exp(-inc_X**2/sigma)
-                inc_Y = torch.exp(-inc_Y**2/sigma)
+            #inc_X = inc_X/float(2**n)  
+            #inc_Y = inc_Y/float(2**n)  
 
-            inc_X = inc_X/float(2**n)  
-            inc_Y = inc_Y/float(2**n)  
+            #increment = torch.einsum('ik,ik->i', inc_X, inc_Y).clone()  
 
-            increment = torch.einsum('ik,ik->i', inc_X, inc_Y).clone()  
+            increment = M_inc[:,i,j].clone()
 
             k_10 = K_XY[:, i + 1, j].clone()
             k_01 = K_XY[:, i, j + 1].clone()
@@ -409,23 +395,23 @@ def SigKernelGramMat_naive(X,Y,n=0,solver=0,rbf=False,sigma=1.):
     K_XY[:,:, 0, :] = 1.
     K_XY[:,:, :, 0] = 1.
 
+    M_inc = increment_matrix_mmd(X,Y,rbf,sigma,n)
+
     for i in range(0, (2**n)*(M-1)):
         for j in range(0, (2**n)*(N-1)):
 
-            ii = int(i / (2 ** n))
-            jj = int(j / (2 ** n))
+            #ii = int(i / (2 ** n))
+            #jj = int(j / (2 ** n))
 
-            inc_X = X[:, ii + 1, :] - X[:,ii, :]
-            inc_Y = Y[:, jj + 1, :] - Y[:, jj, :]
+            #inc_X = X[:, ii + 1, :] - X[:,ii, :]
+            #inc_Y = Y[:, jj + 1, :] - Y[:, jj, :]
 
-            if rbf:
-                inc_X = torch.exp(-inc_X**2/sigma)
-                inc_Y = torch.exp(-inc_Y**2/sigma)
+            #inc_X = inc_X/float(2**n)                                        
+            #inc_Y = inc_Y/float(2**n)            
 
-            inc_X = inc_X/float(2**n)                                        
-            inc_Y = inc_Y/float(2**n)            
+            #increment = torch.einsum('ik,jk->ij', inc_X, inc_Y).clone()  
 
-            increment = torch.einsum('ik,jk->ij', inc_X, inc_Y).clone()  
+            increment = M_inc[:,:,i,j].clone()
 
             k_10 = K_XY[:, :, i + 1, j].clone()
             k_01 = K_XY[:, :, i, j + 1].clone()

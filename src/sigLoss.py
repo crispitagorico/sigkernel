@@ -61,9 +61,9 @@ class SigLoss_naive(torch.nn.Module):
 
     def sig_distance(self,x,y):
 
-        k_xx = SigKernel_naive.apply(x,x,self.n,self.solver,self.rbf,self.sigma)
-        k_yy = SigKernel_naive.apply(y,y,self.n,self.solver,self.rbf,self.sigma)
-        k_xy = SigKernel_naive.apply(x,y,self.n,self.solver,self.rbf,self.sigma)
+        k_xx = SigKernel_naive(x,x,self.n,self.solver,self.rbf,self.sigma)
+        k_yy = SigKernel_naive(y,y,self.n,self.solver,self.rbf,self.sigma)
+        k_xy = SigKernel_naive(x,y,self.n,self.solver,self.rbf,self.sigma)
 
         dist = torch.mean(k_xx) + torch.mean(k_yy) - 2.*torch.mean(k_xy)
 
