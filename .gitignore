@@ -264,3 +264,8 @@ __pycache__/
 /data/AppliancesEnergy_TEST.ts
 /data/AppliancesEnergy_TRAIN.ts
 /data/TracerX
+/data/gemini_BTCUSD_2019_1min.csv
+/data/gemini_BTCUSD_2018_1min.csv
+/data/gemini_BTCUSD_2017_1min.csv
+/data/gemini_BTCUSD_2016_1min.csv
+/data/gemini_BTCUSD_2015_1min.csv
