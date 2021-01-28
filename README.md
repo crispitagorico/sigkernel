@@ -1,4 +1,4 @@
-<h1 align='center'>The Signature Kernel as the solution of a Goursat PDE
+<h1 align='center'>The Signature Kernel is the solution of a Goursat PDE
     [<a href="https://arxiv.org/abs/2006.14794">arXiv</a>] </h1>
 
 ## Overview
