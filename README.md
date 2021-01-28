@@ -5,7 +5,7 @@
 
 The Signature Kernel is a new learning tool designed to handle irregularly sampled, multidimensional time series. Here we show that the Signature Kernel solves an hyperbolic PDE and recognize the link with a well known class of differential equations known in the literature as Goursat problems. This Goursat PDE only depends on the increments of the input sequences, does not require the explicit computation of signatures and can be solved using state-of-the-art hyperbolic PDE numerical solvers; it is effectively a kernel trick for the Signature Kernel. 
 
-<img src="https://render.githubusercontent.com/render/math?math=e^{i \pi} = -1">
+<img src="https://render.githubusercontent.com/render/math?math=\frac{\partial^2 k_{x,y}(s,t)}{\partial s \partial t} = <\dot x_s, \dot x_t> k_{x,y}(s,t)">
 
 -----
 
