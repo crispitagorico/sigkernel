@@ -47,6 +47,8 @@ Navigate into `src/` and run
 ### Run Experiments
 All the experiments can be found in `notebooks/`. 
 
+To reproduce the error distribution plots and time performance analysis execute all cells in `notebooks/performance_analysis.ipynb`
+
 To reproduce the time series classification results execute all cells in `notebooks/time_series_classification.ipynb`. The results will also be saved to `results/`.
 
 To reproduce the time series prediction results and plots exectue all cells in `notebooks/prediction_bitcoin_prices.ipynb`

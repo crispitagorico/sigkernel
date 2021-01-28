@@ -2,8 +2,9 @@ import iisignature
 from esig import tosig as sig
 import numpy as np
 from scipy.ndimage.interpolation import shift
-from scipy.integrate import odeint
 import math
+from fbm import FBM
+from transformers_sig import AddTime
 
 
 def white(steps, width, time=1.):
