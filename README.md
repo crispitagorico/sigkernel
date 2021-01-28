@@ -19,15 +19,35 @@ To setup the environment, install the requirements with
 
 + `pip install -r requirements.txt`
 
+Next install pytorch by running only of the following options
+
+#### CPU only
+
++ `pip install torch==1.6.0+cpu torchvision==0.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html`
+
+#### CUDA 10.2
+
++ `pip install torch==1.6.0 torchvision==0.7.0`
+
+#### CUDA 10.1
+
++ `pip install torch==1.6.0+cu101 torchvision==0.7.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html`
+
+#### CUDA 9.2
+
++ `pip install torch==1.6.0+cu92 torchvision==0.7.0+cu92 -f https://download.pytorch.org/whl/torch_stable.html`
+
+-----
+
 ### Build CPU PDE solver (Cython)
 Navigate into `src/` and run
 
 + `python setup.py build_ext --inplace`
 
-### Run the Experiments
+### Run Experiments
 All the experiments can be found in `notebooks/`. 
 
-To reproduce the time series classification results execute all cells in `notebooks/time_series_classification.ipynb`. The results will also be save to `results/`.
+To reproduce the time series classification results execute all cells in `notebooks/time_series_classification.ipynb`. The results will also be saved to `results/`.
 
 To reproduce the time series prediction results and plots exectue all cells in `notebooks/prediction_bitcoin_prices.ipynb`
 
