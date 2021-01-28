@@ -30,8 +30,8 @@ class SigKernel(torch.autograd.Function):
         MM = (2**n)*(M-1)
         NN = (2**n)*(N-1)
 
-        if X.requires_grad:
-            assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
+        #if X.requires_grad:
+        #    assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
 
         # if on GPU
         if X.device.type=='cuda':
@@ -67,6 +67,8 @@ class SigKernel(torch.autograd.Function):
         ctx.save_for_backward(X,Y,K)
         ctx.n = n
         ctx.solver = solver
+        ctx.sigma = sigma
+        ctx.rbf = rbf
 
         return K[:,-1,-1]
 
@@ -76,6 +78,8 @@ class SigKernel(torch.autograd.Function):
         X, Y, K = ctx.saved_tensors
         n = ctx.n
         solver = ctx.solver
+        rbf = ctx.rbf
+        sigma = ctx.sigma
 
         A = X.shape[0]
         M = X.shape[1]
@@ -113,17 +117,20 @@ class SigKernel(torch.autograd.Function):
         # if on CPU
         else:
 
-            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, rbf=False, sigma=None)
+            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, rbf=rbf, sigma=sigma)
             K_rev = torch.tensor(K_rev, dtype=X.dtype)
 
-        
+        inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(M-1),D)  increments on the finer grid
         inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(N-1),D)  increments on the finer grid
 
         K_rev = flip(flip(K_rev,dim=1),dim=2)
 
         KK = K[:,:-1,:-1] * K_rev[:,1:,1:]                                   # (A,(2**n)*(M-1),(2**n)*(N-1))
 
-        grad_incr = KK[:,:,:,None]*inc_Y[:,None,:,:]                         # (A,(2**n)*(M-1),(2**n)*(N-1),D)
+        if rbf:
+            pass
+        else:
+            grad_incr = KK[:,:,:,None]*inc_Y[:,None,:,:]                     # (A,(2**n)*(M-1),(2**n)*(N-1),D)
 
         grad_incr = torch.sum(grad_incr,axis=2)/float(2**n)                  # (A,(2**n)*(M-1),D)
 
@@ -320,7 +327,33 @@ def increment_matrix_mmd(X,Y,rbf,sigma,n):
         M_inc = torch.einsum('ipk,jqk->ijpq', inc_X, inc_Y)
     return M_inc
 # ===========================================================================================================
+def rbf_var_par_grid_tensor(X,Y,sigma,n):
+    A = X.shape[0]
+    M = X.shape[1]
+    N = Y.shape[1]
 
+    Xs = torch.sum(X**2, dim=2)
+    Ys = torch.sum(Y**2, dim=2)
+
+    # M_inc = k_rbf(x_s,y_t)
+    dist = -2.*torch.bmm(X, Y.permute(0,2,1))
+    dist += torch.reshape(Xs,(A,M,1)) + torch.reshape(Ys,(A,1,N))
+    M_inc = torch.exp(-dist/sigma)
+
+
+
+
+
+    M_inc = M_inc[:,1:,1:] + M_inc[:,:-1,:-1] - M_inc[:,1:,:-1] - M_inc[:,:-1,1:] 
+    M_inc = tile(tile(M_inc,1,2**n)/float(2**n),2,2**n)/float(2**n)
+
+
+
+    #inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)
+    #inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)
+    #M_inc = torch.bmm(inc_X, inc_Y.permute(0,2,1))
+    return M_inc
+# ===========================================================================================================
 
 # ===========================================================================================================
 # Naive implementation of Signature Kernel with original finite difference scheme (slow, just for testing)
