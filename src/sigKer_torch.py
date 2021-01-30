@@ -30,8 +30,8 @@ class SigKernel(torch.autograd.Function):
         MM = (2**n)*(M-1)
         NN = (2**n)*(N-1)
 
-        #if X.requires_grad:
-        #    assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
+        if X.requires_grad:
+            assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
 
         # if on GPU
         if X.device.type=='cuda':
@@ -128,7 +128,23 @@ class SigKernel(torch.autograd.Function):
         KK = K[:,:-1,:-1] * K_rev[:,1:,1:]                                   # (A,(2**n)*(M-1),(2**n)*(N-1))
 
         if rbf:
-            pass
+            # create linear interpolations of X and Y on finer discretization
+            X_interp = torch.cat([torch.zeros(A,1,D), torch.cumsum(inc_X,dim=1)], axis=1) + X[:,0,:][:,None,:]
+            Y_interp = torch.cat([torch.zeros(A,1,D), torch.cumsum(inc_Y,dim=1)], axis=1) + Y[:,0,:][:,None,:]
+
+            # compute tensor k_rbf(x_s,y_t)
+            Xs = torch.sum(X_interp**2, dim=2)
+            Ys = torch.sum(Y_interp**2, dim=2)
+            dist = -2.*torch.bmm(X_interp, Y_interp.permute(0,2,1))
+            dist += Xs[:,:,None] + Ys[:,None,:]  
+            M_rbf = torch.exp(-dist/sigma)
+
+            # form term required in variation of parameters formula (for rbf)
+            term_1 = Y_interp[:,None,1:,:]*M_rbf[:,1:,1:,None] - Y_interp[:,None,:-1,:]*M_rbf[:,1:,:-1,None]
+            term_2 = X_interp[:,1:,None,:]*M_rbf[:,1:,1:,None] - X_interp[:,:-1,None,:]*M_rbf[:,1:,:-1,None]
+
+            grad_incr = 2.*KK[:,:,:,None]*(term_1-term_2)/4.
+
         else:
             grad_incr = KK[:,:,:,None]*inc_Y[:,None,:,:]                     # (A,(2**n)*(M-1),(2**n)*(N-1),D)
 
@@ -327,33 +343,8 @@ def increment_matrix_mmd(X,Y,rbf,sigma,n):
         M_inc = torch.einsum('ipk,jqk->ijpq', inc_X, inc_Y)
     return M_inc
 # ===========================================================================================================
-def rbf_var_par_grid_tensor(X,Y,sigma,n):
-    A = X.shape[0]
-    M = X.shape[1]
-    N = Y.shape[1]
-
-    Xs = torch.sum(X**2, dim=2)
-    Ys = torch.sum(Y**2, dim=2)
-
-    # M_inc = k_rbf(x_s,y_t)
-    dist = -2.*torch.bmm(X, Y.permute(0,2,1))
-    dist += torch.reshape(Xs,(A,M,1)) + torch.reshape(Ys,(A,1,N))
-    M_inc = torch.exp(-dist/sigma)
 
 
-
-
-
-    M_inc = M_inc[:,1:,1:] + M_inc[:,:-1,:-1] - M_inc[:,1:,:-1] - M_inc[:,:-1,1:] 
-    M_inc = tile(tile(M_inc,1,2**n)/float(2**n),2,2**n)/float(2**n)
-
-
-
-    #inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)
-    #inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)
-    #M_inc = torch.bmm(inc_X, inc_Y.permute(0,2,1))
-    return M_inc
-# ===========================================================================================================
 
 # ===========================================================================================================
 # Naive implementation of Signature Kernel with original finite difference scheme (slow, just for testing)
