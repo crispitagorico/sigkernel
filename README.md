@@ -19,7 +19,7 @@ To setup the environment, install the requirements with
 
 + `pip install -r requirements.txt`
 
-Next install pytorch by running only of the following options
+Next install pytorch 1.6.0 by running one of the following options:
 
 #### CPU only
 
@@ -29,13 +29,7 @@ Next install pytorch by running only of the following options
 
 + `pip install torch==1.6.0 torchvision==0.7.0`
 
-#### CUDA 10.1
-
-+ `pip install torch==1.6.0+cu101 torchvision==0.7.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html`
-
-#### CUDA 9.2
-
-+ `pip install torch==1.6.0+cu92 torchvision==0.7.0+cu92 -f https://download.pytorch.org/whl/torch_stable.html`
+To install torch 1.6.0 for other versions of CUDA see <a href="https://pytorch.org/get-started/previous-versions/">.
 
 -----
 
@@ -55,14 +49,15 @@ To reproduce the time series prediction results and plots exectue all cells in `
 
 ## Citation
 
-<!-- 
 ```bibtex
-@article{morrill2020logode,
-    author={Morrill, James and Kidger, Patrick and Salvi, Cristopher and Foster, James and Lyons, Terry},
-    title={{Neural CDEs for Long Time-Series via the Log-ODE Method}},
-    year={2020},
-    journal={arXiv:2009.08295}
+@article{cass2020computing,
+  title={Computing the full signature kernel as the solution of a Goursat problem},
+  author={Cass, Thomas and Lyons, Terry and Salvi, Cristopher and Yang, Weixin},
+  journal={arXiv preprint arXiv:2006.14794},
+  year={2020}
 }
 ```
+
+<!-- 
 -->
 
