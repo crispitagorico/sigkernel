@@ -29,7 +29,7 @@ Next install pytorch 1.6.0 by running one of the following options:
 
 + `pip install torch==1.6.0 torchvision==0.7.0`
 
-To install torch 1.6.0 for other versions of CUDA see <a href="https://pytorch.org/get-started/previous-versions/">.
+To install torch 1.6.0 for other versions of CUDA see <a href="https://pytorch.org/get-started/previous-versions/"> torch install website </a>.
 
 -----
 
