@@ -51,8 +51,8 @@ To reproduce the time series prediction results and plots exectue all cells in `
 
 ```bibtex
 @article{cass2020computing,
-  title={Computing the full signature kernel as the solution of a Goursat problem},
-  author={Cass, Thomas and Lyons, Terry and Salvi, Cristopher and Yang, Weixin},
+  title={The Signature Kernel is the solution of a Goursat PDE},
+  author={Salvi, Cristopher and Cass, Thomas and Lyons, Terry and Yang, Weixin},
   journal={arXiv preprint arXiv:2006.14794},
   year={2020}
 }
