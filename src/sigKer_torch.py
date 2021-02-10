@@ -141,7 +141,7 @@ class SigKernel(torch.autograd.Function):
 
             # form term required in variation of parameters formula (for rbf)
             term_1 = Y_interp[:,None,1:,:]*M_rbf[:,1:,1:,None] - Y_interp[:,None,:-1,:]*M_rbf[:,1:,:-1,None]
-            term_2 = X_interp[:,1:,None,:]*M_rbf[:,1:,1:,None] - X_interp[:,:-1,None,:]*M_rbf[:,1:,:-1,None]
+            term_2 = X_interp[:,1:,None,:]*M_rbf[:,1:,1:,None] - X_interp[:,1:,None,:]*M_rbf[:,1:,:-1,None]
 
             grad_incr = 2.*KK[:,:,:,None]*(term_1-term_2)/4.
 
