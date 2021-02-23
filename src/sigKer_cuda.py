@@ -4,7 +4,7 @@ import math
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=0):
+def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=1):
     """
     We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
     M_inc: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
@@ -57,7 +57,7 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=0):
+def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=1):
 
     block_id_x = cuda.blockIdx.x
     block_id_y = cuda.blockIdx.y

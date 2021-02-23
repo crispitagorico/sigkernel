@@ -210,64 +210,29 @@ def sig_kernel_Gram_matrix(double[:,:,:] x, double[:,:,:] y, int n=0, int solver
 		return np.array(K[:,:,MM,NN])
 
 
-def sig_kernel_batch_varpar(double[:,:,:] x, double[:,:,:] y, int n=0, int solver=0, bint rbf=False, double sigma=1.):
+def sig_kernel_batch_varpar(double[:,:,:] G_static):
 
-	cdef int A = x.shape[0]
-	cdef int M = x.shape[1]
-	cdef int N = y.shape[1]
-	cdef int D = x.shape[2]
-
-	cdef double increment
-	cdef double d1, d2, d3, d4 
-	cdef double factor = 2**(2*n)
-
-	cdef int i, j, k, l, ii, jj
-	cdef int MM = (2**n)*(M-1)
-	cdef int NN = (2**n)*(N-1)
-
-	cdef double[:,:,:] K = np.zeros((A,MM+1,NN+1), dtype=np.float64)
+	cdef int A = G_static.shape[0]
+	cdef int M = G_static.shape[1]
+	cdef int N = G_static.shape[1]
+	cdef int i, j, l
+	
+	cdef double[:,:,:] K = np.zeros((A,M+1,N+1), dtype=np.float64)
 		
-	# for l in prange(A,nogil=True):
 	for l in range(A):
-			
-		for i in range(MM+1):
+
+		for i in range(M+1):
 			K[l,i,0] = 1.
 	
-		for j in range(NN+1):
+		for j in range(N+1):
 			K[l,0,j] = 1.
 
-		for i in range(MM):
-			for j in range(NN):
+		for i in range(M):
+			for j in range(N):
 
-				ii = int(i/(2**n))
-				jj = int(j/(2**n))
-
-				increment = 0.
-				d1 = 0.
-				d2 = 0.
-				d3 = 0.
-				d4 = 0.
-				for k in range(D):
-
-					if rbf:
-						d1 = d1 + (x[l,ii+1,k]-y[l,jj+1,k])**2
-						d2 = d2 + (x[l,ii+1,k]-y[l,jj,k])**2
-						d3 = d3 + (x[l,ii,k]-y[l,jj+1,k])**2
-						d4 = d4 + (x[l,ii,k]-y[l,jj,k])**2
-					else:
-						increment = increment + (x[l,ii+1,k]-x[l,ii,k])*(y[l,jj+1,k]-y[l,jj,k])
-
-				if rbf:
-					increment = ( exp(-d1/sigma) - exp(-d2/sigma) - exp(-d3/sigma) + exp(-d4/sigma) )/factor
-				else:
-					increment = increment/factor
-
-				if solver==0:
-					K[l,i+1,j+1] = K[l,i+1,j] + K[l,i,j+1] + K[l,i,j]*(increment - 1.)
-				elif solver==1:
-					K[l,i+1,j+1] = (K[l,i+1,j] + K[l,i,j+1])*(1. + 0.5*increment+(1./12)*increment**2) - K[l,i,j]*(1. - (1./12)*increment**2)
-				else:
-					K[l,i+1,j+1] = K[l,i+1,j] + K[l,i,j+1] - K[l,i,j] + (exp(0.5*increment)-1.)*(K[l,i+1,j] + K[l,i,j+1])
+				# K[l,i+1,j+1] = K[l,i+1,j] + K[l,i,j+1] + K[l,i,j]*(G_static[l,i,j] - 1.)
+				K[l,i+1,j+1] = (K[l,i+1,j] + K[l,i,j+1])*(1. + 0.5*G_static[l,i,j]+(1./12)*G_static[l,i,j]**2) - K[l,i,j]*(1. - (1./12)*G_static[l,i,j]**2)
+				# K[l,i+1,j+1] = K[l,i+1,j] + K[l,i,j+1] - K[l,i,j] + (exp(0.5*G_static[l,i,j])-1.)*(K[l,i+1,j] + K[l,i,j+1])
 
 	return np.array(K)
 

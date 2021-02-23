@@ -6,100 +6,119 @@ from numba import cuda
 from sigKer_fast import sig_kernel_batch_varpar, sig_kernel_Gram_matrix
 from sigKer_cuda import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
 
+class LinearKernel():
+    """Linear kernel k: R^d x R^d -> R"""
 
-# ===========================================================================================================
-# Signature kernel k(x,y) = <S(x),S(y)> computed by solving Goursat PDE
-# and gradients via second PDE and variation of parameters.
-# ===========================================================================================================
-class SigKernel(torch.autograd.Function):
+    def batch_kernel(self, X, Y):
+        """Input: 
+                  - X: torch tensor of shape (batch, length_X, dim),
+                  - Y: torch tensor of shape (batch, length_Y, dim)
+           Output: 
+                  - matrix k(X^i_s,Y^i_t) of shape (batch, length_X, length_Y)
+        """
+        return torch.bmm(X, Y.permute(0,2,1))
 
+
+class RBFKernel():
+    """RBF kernel k: R^d x R^d -> R"""
+
+    def __init__(self, sigma):
+        self.sigma = sigma
+
+    def batch_kernel(self, X, Y):
+        """Input: 
+                  - X: torch tensor of shape (batch, length_X, dim),
+                  - Y: torch tensor of shape (batch, length_Y, dim)
+           Output: 
+                  - matrix k(X^i_s,Y^i_t) of shape (batch, length_X, length_Y)
+        """
+        A = X.shape[0]
+        M = X.shape[1]
+        N = Y.shape[1]
+        Xs = torch.sum(X**2, dim=2)
+        Ys = torch.sum(Y**2, dim=2)
+        dist = -2.*torch.bmm(X, Y.permute(0,2,1))
+        dist += torch.reshape(Xs,(A,M,1)) + torch.reshape(Ys,(A,1,N))
+        return torch.exp(-dist/self.sigma)
+
+
+class _SigKernel(torch.autograd.Function):
+    """Wrapper for signature kernel k_sig(x,y) = <S(f(x)),S(f(y))> where k(x,y) = <f(x),f(y)> is a given static kernel"""
+ 
     @staticmethod
-    def forward(ctx, X, Y, n=0, solver=0, rbf=False, sigma=1.):
-        """
-            Compute Signature Kernel and its gradients via variation of parameters. Supports both CPU and GPU.
-         
-            - X : 3-tensor of shape (batch, len, dim)
-            - Y : 3-tensor of shape (batch, len, dim)       
-        """
+    def forward(ctx, X, Y, static_kernel, dyadic_order):
 
         A = X.shape[0]
         M = X.shape[1]
         N = Y.shape[1]
         D = X.shape[2]
 
-        MM = (2**n)*(M-1)
-        NN = (2**n)*(N-1)
+        MM = (2**dyadic_order)*(M-1)
+        NN = (2**dyadic_order)*(N-1)
 
-        if X.requires_grad:
-            assert not rbf, 'Current backpropagation method only for linear signature kernel. For rbf signature kernel use naive implementation'
+        # computing dsdt k(X^i_s,Y^i_t)
+        G_static = static_kernel.batch_kernel(X,Y)
+        G_static = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:] 
+        G_static = tile(tile(G_static,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
         # if on GPU
         if X.device.type=='cuda':
 
             assert max(MM+1,NN+1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
             
-            M_inc = increment_matrix(X,Y,rbf,sigma,n)
-            
             # cuda parameters
             threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Prepare the tensor of output solutions to the PDE (forward)
-            K = torch.zeros((A, MM+2, NN+2), device=M_inc.device, dtype=M_inc.dtype) 
+            K = torch.zeros((A, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype) 
             K[:,0,:] = 1.
             K[:,:,0] = 1. 
 
-            # Run the CUDA kernel to compute the forward signature kernel.
-            # Set CUDA's grid size to be equal to the batch size (every CUDA block processes one sample pair)
-            # Set the CUDA block size to be equal to the length of the longer sequence (equal to the size of the largest diagonal)
-            compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc.detach()),
+            # Compute the forward signature kernel
+            compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(G_static.detach()),
                                                                                        MM+1, NN+1, n_anti_diagonals,
-                                                                                       cuda.as_cuda_array(K), solver)
-
+                                                                                       cuda.as_cuda_array(K))
             K = K[:,:-1,:-1]
 
         # if on CPU
         else:
-            
-            K = sig_kernel_batch_varpar(X.detach().numpy(), Y.detach().numpy(), n=n, solver=solver, rbf=rbf, sigma=sigma)
-            K = torch.tensor(K, dtype=X.dtype)
+            K = torch.tensor(sig_kernel_batch_varpar(G_static.detach().numpy()))
 
-        ctx.save_for_backward(X,Y,K)
-        ctx.n = n
-        ctx.solver = solver
-        ctx.sigma = sigma
-        ctx.rbf = rbf
+        ctx.save_for_backward(X,Y,G_static,K)
+        ctx.static_kernel = static_kernel
+        ctx.dyadic_order = dyadic_order
 
         return K[:,-1,-1]
+
 
     @staticmethod
     def backward(ctx, grad_output):
     
-        X, Y, K = ctx.saved_tensors
-        n = ctx.n
-        solver = ctx.solver
-        rbf = ctx.rbf
-        sigma = ctx.sigma
+        X, Y, G_static, K = ctx.saved_tensors
+        static_kernel = ctx.static_kernel
+        dyadic_order = ctx.dyadic_order
 
         A = X.shape[0]
         M = X.shape[1]
         N = Y.shape[1]
         D = X.shape[2]
 
-        MM = (2**n)*(M-1)
-        NN = (2**n)*(N-1)
+        MM = (2**dyadic_order)*(M-1)
+        NN = (2**dyadic_order)*(N-1)
             
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
         Y_rev = torch.flip(Y, dims=[1])
 
+        # computing dsdt k(X_rev^i_s,Y_rev^i_t) for variation of parameters
+        G_static_rev = flip(flip(G_static,dim=1),dim=2)
+
         # if on GPU
         if X.device.type=='cuda':
 
-            M_inc_rev = increment_matrix(X_rev,Y_rev,rbf=False,sigma=None,n=n)
-
             # Prepare the tensor of output solutions to the PDE (backward)
-            K_rev = torch.zeros((A, MM+2, NN+2), device=M_inc_rev.device, dtype=M_inc_rev.dtype) 
+            K_rev = torch.zeros((A, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype) 
             K_rev[:,0,:] = 1.
             K_rev[:,:,0] = 1. 
 
@@ -108,17 +127,14 @@ class SigKernel(torch.autograd.Function):
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Compute signature kernel for reversed paths
-            compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(M_inc_rev.detach()), 
+            compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()), 
                                                                                        MM+1, NN+1, n_anti_diagonals,
-                                                                                       cuda.as_cuda_array(K_rev), solver)
-
+                                                                                       cuda.as_cuda_array(K_rev))
             K_rev = K_rev[:,:-1,:-1]      
 
         # if on CPU
         else:
-
-            K_rev = sig_kernel_batch_varpar(X_rev.detach().numpy(), Y_rev.detach().numpy(), n=n, solver=solver, rbf=rbf, sigma=sigma)
-            K_rev = torch.tensor(K_rev, dtype=X.dtype)
+            K_rev = torch.tensor(sig_kernel_batch_varpar(G_static_rev.detach().numpy()))
 
         inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(M-1),D)  increments on the finer grid
         inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(N-1),D)  increments on the finer grid
