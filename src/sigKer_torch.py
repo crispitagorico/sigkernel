@@ -136,42 +136,24 @@ class _SigKernel(torch.autograd.Function):
         else:
             K_rev = torch.tensor(sig_kernel_batch_varpar(G_static_rev.detach().numpy()))
 
-        inc_X = tile(X[:,1:,:]-X[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(M-1),D)  increments on the finer grid
-        inc_Y = tile(Y[:,1:,:]-Y[:,:-1,:],1,2**n)/float(2**n)                # (A,(2**n)*(N-1),D)  increments on the finer grid
-
         K_rev = flip(flip(K_rev,dim=1),dim=2)
+        KK = K[:,:-1,:-1] * K_rev[:,1:,1:]     
 
-        KK = K[:,:-1,:-1] * K_rev[:,1:,1:]                                   # (A,(2**n)*(M-1),(2**n)*(N-1))
+        # finite difference step 
+        h = 1e-6
 
-        if rbf:
-            # create linear interpolations of X and Y on finer discretization
-            X_interp = torch.cat([torch.zeros(A,1,D), torch.cumsum(inc_X,dim=1)], axis=1) + X[:,0,:][:,None,:]
-            Y_interp = torch.cat([torch.zeros(A,1,D), torch.cumsum(inc_Y,dim=1)], axis=1) + Y[:,0,:][:,None,:]
+        G_h = static_kernel.batch_kernel(X+h,Y) # TODO: (A,M,N,D)
+        Diff = G_h[:,1:,1:,:] - G_h[:,1:,:-1,:] - G_static[:,1:,1:][:,:,:,None] + G_static[:,1:,:-1][:,:,:,None]
+        Diff = tile(tile(Diff,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)  #not sure we have to rescale
 
-            # compute tensor k_rbf(x_s,y_t)
-            Xs = torch.sum(X_interp**2, dim=2)
-            Ys = torch.sum(Y_interp**2, dim=2)
-            dist = -2.*torch.bmm(X_interp, Y_interp.permute(0,2,1))
-            dist += Xs[:,:,None] + Ys[:,None,:]  
-            M_rbf = torch.exp(-dist/sigma)
+        grad_1 = KK[:,:,:,None] * Diff
+        grad_1 = torch.sum(grad_1,axis=2)
+        grad_1 = torch.sum(grad_1.reshape(A,M-1,2**n,D),axis=2)
 
-            # form term required in variation of parameters formula (for rbf)
-            term_1 = Y_interp[:,None,1:,:]*M_rbf[:,1:,1:,None] - Y_interp[:,None,:-1,:]*M_rbf[:,1:,:-1,None]
-            term_2 = X_interp[:,1:,None,:]*M_rbf[:,1:,1:,None] - X_interp[:,1:,None,:]*M_rbf[:,1:,:-1,None]
+        # TODO: grad_2 
 
-            grad_incr = 2.*KK[:,:,:,None]*(term_1-term_2)/4.
-
-        else:
-            grad_incr = KK[:,:,:,None]*inc_Y[:,None,:,:]                     # (A,(2**n)*(M-1),(2**n)*(N-1),D)
-
-        grad_incr = torch.sum(grad_incr,axis=2)/float(2**n)                  # (A,(2**n)*(M-1),D)
-
-        grad_incr =  torch.sum(grad_incr.reshape(A,M-1,2**n,D),axis=2)       # (A,M-1,D)
-
-        if Y.requires_grad:
-            grad_incr*=2
-
-        grad_points = -torch.cat([grad_incr,torch.zeros((A, 1, D), dtype=X.dtype, device=X.device)], dim=1) + torch.cat([torch.zeros((A, 1, D), dtype=X.dtype, device=X.device), grad_incr], dim=1)
+        grad_points = grad_1[:,:-1,:] + grad_2[:,1:,:]
+        grad_points = torch.cat([grad_2[:,0,:][:,None,:],grad_points,grad_1[:,-1,:][:,None,:]],dim=1)    
 
         return grad_output[:,None,None]*grad_points, None, None, None, None, None
 # ===========================================================================================================
