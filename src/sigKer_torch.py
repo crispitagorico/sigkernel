@@ -117,7 +117,7 @@ class SigKernel():
 
         return torch.mean(k_XX) + torch.mean(k_YY) - 2.*torch.mean(k_XY) 
 
-    def compute_mmd(self):
+    def compute_mmd(self, X, Y):
         """Input: 
                   - X: torch tensor of shape (batch_X, length_X, dim),
                   - Y: torch tensor of shape (batch_Y, length_Y, dim)
@@ -267,6 +267,10 @@ class _SigKernel(torch.autograd.Function):
         grad_next = torch.cat([torch.zeros((A, 1, D), dtype=X.dtype, device=X.device), grad_1[:,1:,:]],dim=1)   # /
         grad_incr = grad_prev - grad_1[:,1:,:]
         grad_points = torch.cat([(grad_2[:,0,:]-grad_1[:,0,:])[:,None,:],grad_incr,grad_1[:,-1,:][:,None,:]],dim=1)
+
+        if Y.requires_grad:
+            grad_points*=2
+
         return grad_output[:,None,None]*grad_points, None, None, None
 
 
@@ -284,8 +288,8 @@ class _SigKernelGram(torch.autograd.Function):
         N = Y.shape[1]
         D = X.shape[2]
 
-        MM = (2**n)*(M-1)
-        NN = (2**n)*(N-1)
+        MM = (2**dyadic_order)*(M-1)
+        NN = (2**dyadic_order)*(N-1)
 
         # computing dsdt k(X^i_s,Y^j_t)
         G_static = static_kernel.Gram_matrix(X,Y)
@@ -407,6 +411,9 @@ class _SigKernelGram(torch.autograd.Function):
         grad_incr = grad_prev - grad_1[:,:,1:,:]
         grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)
 
+        if Y.requires_grad:
+            grad_points*=2
+
         if sym:
             grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
             return grad, None, None, None, None, None, None
@@ -445,22 +452,28 @@ def tile(a, dim, n_tile):
 # ===========================================================================================================
 # Naive implementation of Signature Kernel with original finite difference scheme (slow, just for testing)
 # ===========================================================================================================
-def SigKernel_naive(X,Y,n=0,solver=1,rbf=False,sigma=1.):
+def SigKernel_naive(X,Y,static_kernel,dyadic_order=0,solver=1):
 
     A = len(X)
     M = X[0].shape[0]
     N = Y[0].shape[0]
 
-    K_XY = torch.zeros((A, (2**n)*(M-1)+1, (2**n)*(N-1)+1), dtype=X.dtype, device=X.device)
+    MM = (2**dyadic_order)*(M-1)
+    NN = (2**dyadic_order)*(N-1)
+
+    K_XY = torch.zeros((A, MM+1, NN+1), dtype=X.dtype, device=X.device)
     K_XY[:, 0, :] = 1.
     K_XY[:, :, 0] = 1.
 
-    M_inc = increment_matrix(X,Y,rbf,sigma,n)
+    # computing dsdt k(X^i_s,Y^i_t)
+    G_static = static_kernel.batch_kernel(X,Y)
+    G_static = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:] 
+    G_static = tile(tile(G_static,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
-    for i in range(0, (2**n)*(M-1)):
-        for j in range(0, (2**n)*(N-1)):
+    for i in range(MM):
+        for j in range(NN):
 
-            increment = M_inc[:,i,j].clone()
+            increment = G_static[:,i,j].clone()
 
             k_10 = K_XY[:, i + 1, j].clone()
             k_01 = K_XY[:, i, j + 1].clone()
@@ -483,42 +496,47 @@ def SigKernel_naive(X,Y,n=0,solver=1,rbf=False,sigma=1.):
 # ===========================================================================================================
 class SigLoss_naive(torch.nn.Module):
 
-    def __init__(self, n=0, solver=0, rbf=False, sigma=1.):
+    def __init__(self, static_kernel,dyadic_order=0,solver=1):
         super(SigLoss_naive, self).__init__()
-        self.n = n
+        self.static_kernel = static_kernel
+        self.dyadic_order = dyadic_order
         self.solver = solver
-        self.rbf = rbf
-        self.sigma = sigma
 
     def forward(self,x,y):
 
-        k_xx = SigKernel_naive(x,x,self.n,self.solver,self.rbf,self.sigma)
-        k_yy = SigKernel_naive(y,y,self.n,self.solver,self.rbf,self.sigma)
-        k_xy = SigKernel_naive(x,y,self.n,self.solver,self.rbf,self.sigma)
+        k_XX = SigKernel_naive(X,X,self.static_kernel,self.dyadic_order,self.solver)
+        k_YY = SigKernel_naive(Y,Y,self.static_kernel,self.dyadic_order,self.solver)
+        k_XY = SigKernel_naive(X,Y,self.static_kernel,self.dyadic_order,self.solver)
 
-        return torch.mean(k_xx) + torch.mean(k_yy) - 2.*torch.mean(k_xy)
+        return torch.mean(k_XX) + torch.mean(k_YY) - 2.*torch.mean(k_XY)
 
 
 # ===========================================================================================================
 # Naive implementation of Signature Gram matrix with original finite difference scheme (slow, just for testing)
 # ===========================================================================================================
-def SigKernelGramMat_naive(X,Y,n=0,solver=1,rbf=False,sigma=1.):
+def SigKernelGramMat_naive(X,Y,static_kernel,dyadic_order=0,solver=1):
 
     A = len(X)
     B = len(Y)
     M = X[0].shape[0]
     N = Y[0].shape[0]
 
-    K_XY = torch.zeros((A,B, (2**n)*(M-1)+1, (2**n)*(N-1)+1), dtype=X.dtype, device=X.device)
+    MM = (2**dyadic_order)*(M-1)
+    NN = (2**dyadic_order)*(N-1)
+
+    K_XY = torch.zeros((A,B, MM+1, NN+1), dtype=X.dtype, device=X.device)
     K_XY[:,:, 0, :] = 1.
     K_XY[:,:, :, 0] = 1.
 
-    M_inc = increment_matrix_mmd(X,Y,rbf,sigma,n)
+    # computing dsdt k(X^i_s,Y^j_t)
+    G_static = static_kernel.Gram_matrix(X,Y)
+    G_static = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:] 
+    G_static = tile(tile(G_static,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
 
-    for i in range(0, (2**n)*(M-1)):
-        for j in range(0, (2**n)*(N-1)):
+    for i in range(MM):
+        for j in range(NN):
 
-            increment = M_inc[:,:,i,j].clone()
+            increment = G_static[:,:,i,j].clone()
 
             k_10 = K_XY[:, :, i + 1, j].clone()
             k_01 = K_XY[:, :, i, j + 1].clone()
@@ -540,39 +558,36 @@ def SigKernelGramMat_naive(X,Y,n=0,solver=1,rbf=False,sigma=1.):
 # =========================================================================================================================================
 class SigMMD_naive(torch.nn.Module):
 
-    def __init__(self, n=0, solver=0, rbf=False, sigma=1.):
+    def __init__(self, static_kernel,dyadic_order=0,solver=1):
         super(SigMMD_naive, self).__init__()
-        self.n = n
+        self.static_kernel = static_kernel
+        self.dyadic_order = dyadic_order
         self.solver = solver
-        self.rbf = rbf
-        self.sigma = sigma
 
     def forward(self, X, Y):
 
-        K_XX = SigKernelGramMat_naive(X,X,self.n,self.solver,self.rbf,self.sigma)
-        K_YY = SigKernelGramMat_naive(Y,Y,self.n,self.solver,self.rbf,self.sigma)    
-        K_XY = SigKernelGramMat_naive(X,Y,self.n,self.solver,self.rbf,self.sigma)
+        K_XX = SigKernelGramMat_naive(X,X,self.static_kernel,self.dyadic_order,self.solver)
+        K_YY = SigKernelGramMat_naive(Y,Y,self.static_kernel,self.dyadic_order,self.solver)  
+        K_XY = SigKernelGramMat_naive(X,Y,self.static_kernel,self.dyadic_order,self.solver)
         
-        dist = torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY) 
-
-        return torch.mean((X[:,0,:]-Y[:,0,:])**2) + dist
+        return torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY) 
 
 
 def c_alpha(m, alpha):
     return 4. * np.sqrt(-np.log(alpha) / m)
 
 
-def hypothesis_test(y_pred, y_test, confidence_level=0.99, n=5, solver=1, rbf=False, sigma=1.):
+def hypothesis_test(y_pred, y_test, confidence_level=0.99, static_kernel,dyadic_order=0,solver=1):
     """Statistical test based on MMD distance to determine if 
        two sets of paths come from the same distribution.
     """
 
+    k_sig = SigKernel(static_kernel, dyadic_order)
+
     m = max(y_pred.shape[0], y_test.shape[0])
     
-    dist = SigMMD(n=n, solver=solver, rbf=rbf, sigma=sigma)
-
-    TU = dist(y_pred, y_test)
-    
+    TU = k_sig.compute_mmd(y_pred,y_test)  
+  
     c = torch.tensor(c_alpha(m, confidence_level), dtype=y_pred.dtype)
 
     if TU > c:
