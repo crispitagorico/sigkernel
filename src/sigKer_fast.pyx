@@ -214,7 +214,7 @@ def sig_kernel_batch_varpar(double[:,:,:] G_static):
 
 	cdef int A = G_static.shape[0]
 	cdef int M = G_static.shape[1]
-	cdef int N = G_static.shape[1]
+	cdef int N = G_static.shape[2]
 	cdef int i, j, l
 	
 	cdef double[:,:,:] K = np.zeros((A,M+1,N+1), dtype=np.float64)
