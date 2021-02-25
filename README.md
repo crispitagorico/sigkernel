@@ -1,9 +1,9 @@
 <h1 align='center'>sigkernel</h1>
-<h2 align='center'>Differentiable GPU-capable computations for the signature-PDE-kernel</h2>
+<h2 align='center'>Differentiable computations for the signature-PDE-kernel on CPU and GPU</h2>
 
-This library provides differentiable GPU-capable computation in PyTorch for the [signature-PDE-kernel](https://arxiv.org/abs/2006.14794). Automatic differentiation is done efficiently without backpropagating through the PDE solver.
+This library provides differentiable computation in PyTorch for the [signature-PDE-kernel](https://arxiv.org/abs/2006.14794) both on CPU and GPU. Automatic differentiation is done efficiently without backpropagating through the PDE solver.
 
-This allows to build state-of-the-art kernel-methods such as SVM or Gaussian Processes for irregularly sampled multivariate time series.
+This allows to build state-of-the-art kernel-methods such as SVM or Gaussian Processes for complex, high-dimensional, irregularly-sampled, multivariate sequences of data.
 
 ---
 
@@ -23,9 +23,9 @@ To run the specific examples in folder `./examples`, install the requirements wi
 ## Citation
 
 ```bibtex
-@article{cass2020computing,
+@article{salvi2020computing,
   title={The Signature Kernel is the solution of a Goursat PDE},
-  author={Salvi, Cristopher and Cass, Thomas and Lyons, Terry and Yang, Weixin},
+  author={Salvi, Cristopher and Cass, Thomas and Foster, James and Lyons, Terry and Yang, Weixin},
   journal={arXiv preprint arXiv:2006.14794},
   year={2020}
 }
