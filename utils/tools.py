@@ -1,9 +1,7 @@
 import iisignature
-from esig import tosig as sig
 import numpy as np
 from scipy.ndimage.interpolation import shift
 import math
-from fbm import FBM
 from transformers_sig import AddTime
 
 
@@ -69,31 +67,3 @@ def truncated_sigKernel(X, num_levels, order=-1, difference=True, sigma=1.):
         R = R_next
         K += sigma[m+1] * np.sum(R, axis=(0, 1, 3, 5))
     return K
-
-
-def generate(M, N, h_x=0.8, h_y=0.8, scale=1., signature=False, BM=False, dim_BM=2):
-    
-    if BM:
-        X = brownian(M-1, dim_BM, time=1.)
-        Y = brownian(N-1, dim_BM, time=1.)
-
-    else:
-        fbm_generator_X = FBM(M-1, h_x)
-        fbm_generator_Y = FBM(N-1, h_y)
-
-        x = scale*fbm_generator_X.fbm()
-        y = scale*fbm_generator_Y.fbm()
-
-        X = AddTime().fit_transform([x])[0]
-        Y = AddTime().fit_transform([y])[0]
-    
-    if signature:
-        X = iisignature.sig(X,5,2)
-        Y = iisignature.sig(Y,5,2)
-
-        X0 = np.zeros_like(X[0,:].reshape(1,-1))
-        X0[0,0] = 1.
-        X = np.concatenate([X0, X])
-        Y = np.concatenate([X0, Y])
-        
-    return X, Y

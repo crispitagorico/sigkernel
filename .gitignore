@@ -259,11 +259,12 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
-/notebooks/.ipynb_checkpoints
-/notebooks/generative_model_S&P500.ipynb
-/notebooks/generative_model_Lotka_Volterra.ipynb
-/notebooks/perfomance_analysis.ipynb
+/examples/.ipynb_checkpoints
+/examples/generative_model_S&P500.ipynb
+/examples/generative_model_Lotka_Volterra.ipynb
+/examples/perfomance_analysis.ipynb
 /data/Lotka_Volterra_x_data.pt
 /data/Lotka_Volterra_y_data.pt
 /data/S&P_500_x_data.pt
 /data/S&P_500_y_data.pt
+/utils/sqrtm.py
