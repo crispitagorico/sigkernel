@@ -35,14 +35,14 @@ classifiers = ["Intended Audience :: Developers",
                "Topic :: Scientific/Engineering :: Information Analysis",
                "Topic :: Scientific/Engineering :: Mathematics"]
 
-#python_requires = "~=3.6"
+python_requires = "~=3.6"
 
 install_requires = ["numba >= 0.50", "torch >= 1.6.0"]
 
 ext_modules = [
     setuptools.Extension(
         name="cython_backend",
-        sources=["./sigkernel/cython_backend.pyx"],
+        sources=["sigkernel/cython_backend.pyx"],
         #extra_compile_args=['/openmp'],
         #extra_link_args=['/openmp'],
     )
@@ -60,7 +60,7 @@ setuptools.setup(name=name,
                  license=license,
                  classifiers=classifiers,
                  zip_safe=False,
-                 #python_requires=python_requires,
+                 python_requires=python_requires,
                  install_requires=install_requires,
                  ext_modules=cythonize(ext_modules),
                  packages=[name])
