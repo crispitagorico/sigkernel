@@ -268,4 +268,3 @@ __pycache__/
 /data/S&P_500_x_data.pt
 /data/S&P_500_y_data.pt
 /utils/sqrtm.py
-pyproject.toml
