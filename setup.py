@@ -7,6 +7,8 @@ here = os.path.realpath(os.path.dirname(__file__))
 
 name = 'sigkernel'
 
+version = '0.0.1'
+
 author = 'Cristopher Salvi'
 
 author_email = 'crispitagorico@gmail.com'
@@ -49,6 +51,7 @@ ext_modules = [
 ]
 
 setuptools.setup(name=name,
+                 version=version,
                  author=author,
                  author_email=author_email,
                  maintainer=author,
