@@ -1,7 +1,7 @@
 import io
 import os
 import setuptools
-from Cython.Build import cythonize
+#from Cython.Build import cythonize
 
 here = os.path.realpath(os.path.dirname(__file__))
 
@@ -37,7 +37,9 @@ classifiers = ["Intended Audience :: Developers",
 
 python_requires = "~=3.6"
 
-install_requires = ["numba >= 0.50", "torch >= 1.6.0"]
+install_requires = ["numba >= 0.50", "torch >= 1.6.0", "numpy >= 1.15"]
+
+setup_requires = ["cython >= 0.29"]
 
 ext_modules = [
     setuptools.Extension(
@@ -62,5 +64,7 @@ setuptools.setup(name=name,
                  zip_safe=False,
                  python_requires=python_requires,
                  install_requires=install_requires,
-                 ext_modules=cythonize(ext_modules),
+                 setup_requires=setup_requires,
+                 #ext_modules=cythonize(ext_modules),
+                 ext_modules=ext_modules,
                  packages=[name])
