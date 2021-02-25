@@ -4,7 +4,7 @@ import math
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=1):
+def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, _naive_solver=False):
     """
     We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
     M_inc: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
@@ -38,18 +38,11 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
             k_10 = M_sol[block_id, i, j-1]
             k_00 = M_sol[block_id, i-1, j-1]
 
-            # vanilla scheme
-            if solver==0:
+            if _naive_solver:
                 M_sol[block_id, i, j] = k_01 + k_10 + k_00*(inc-1.)
-
-            # explicit scheme
-            elif solver==1:
-                M_sol[block_id, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
-            
-            # implicit scheme
             else:
-                #M_sol[block_id, i, j] = k_01+k_10-k_00 + ((0.5*inc)/(1.-0.25*inc))*(k_01+k_10)
-                M_sol[block_id, i, j] = k_01 + k_10 - k_00 + (math.exp(0.5*inc) - 1.)*(k_01 + k_10)
+                M_sol[block_id, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
+                #M_sol[block_id, i, j] = k_01 + k_10 - k_00 + (math.exp(0.5*inc) - 1.)*(k_01 + k_10)
 
         # Wait for other threads in this block
         cuda.syncthreads()
@@ -57,7 +50,7 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, solver=1):
+def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y, n_anti_diagonals, M_sol, _naive_solver=False):
 
     block_id_x = cuda.blockIdx.x
     block_id_y = cuda.blockIdx.y
@@ -87,17 +80,11 @@ def compute_sig_kernel_Gram_mat_varpar_from_increments_cuda(M_inc, len_x, len_y,
             k_00 = M_sol[block_id_x, block_id_y, i-1, j-1]
 
             # vanilla scheme
-            if solver==0:
+            if _naive_solver:
                 M_sol[block_id_x, block_id_y, i, j] = k_01 + k_10 + k_00*(inc-1.)
-
-            # explicit scheme
-            elif solver==1:
-                M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
-
-            # implicit scheme
             else:
-                #M_sol[block_id_x, block_id_y, i, j] = k_01+k_10-k_00 + ((0.5*inc)/(1.-0.25*inc))*(k_01+k_10)
-                M_sol[block_id_x, block_id_y, i, j] = k_01 + k_10 - k_00 + (math.exp(0.5*inc) - 1.)*(k_01 + k_10)
+                M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
+                #M_sol[block_id_x, block_id_y, i, j] = k_01 + k_10 - k_00 + (math.exp(0.5*inc) - 1.)*(k_01 + k_10)
 
         # Wait for other threads in this block
         cuda.syncthreads()

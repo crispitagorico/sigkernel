@@ -1,3 +1,3 @@
 import sys
-sys.path.append('../src')
+sys.path.append('../sigkernel')
 sys.path.append('../utils')
