@@ -4,14 +4,14 @@
 from libc.math cimport exp
 import numpy as np
 
-def sig_kernel_batch_varpar(double[:,:,:] G_static, bint _naive_solver=False):
+def sig_kernel_batch_varpar(float[:,:,:] G_static, bint _naive_solver=False):
 
 	cdef int A = G_static.shape[0]
 	cdef int M = G_static.shape[1]
 	cdef int N = G_static.shape[2]
 	cdef int i, j, l
 	
-	cdef double[:,:,:] K = np.zeros((A,M+1,N+1), dtype=np.float64)
+	cdef float[:,:,:] K = np.zeros((A,M+1,N+1), dtype=np.float32)
 		
 	for l in range(A):
 
@@ -33,7 +33,7 @@ def sig_kernel_batch_varpar(double[:,:,:] G_static, bint _naive_solver=False):
 	return np.array(K)
 
 
-def sig_kernel_Gram_varpar(double[:,:,:,:] G_static, bint sym=False, bint _naive_solver=False):
+def sig_kernel_Gram_varpar(float[:,:,:,:] G_static, bint sym=False, bint _naive_solver=False):
 
 	cdef int A = G_static.shape[0]
 	cdef int B = G_static.shape[1]
@@ -41,7 +41,7 @@ def sig_kernel_Gram_varpar(double[:,:,:,:] G_static, bint sym=False, bint _naive
 	cdef int N = G_static.shape[3]
 	cdef int i, j, l, m
 
-	cdef double[:,:,:,:] K = np.zeros((A,B,M+1,N+1), dtype=np.float64)
+	cdef float[:,:,:,:] K = np.zeros((A,B,M+1,N+1), dtype=np.float32)
 
 	if sym:
 		# for l in prange(A,nogil=True):

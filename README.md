@@ -13,7 +13,7 @@ This allows to build state-of-the-art kernel-methods such as SVM or Gaussian Pro
 pip install git+https://github.com/crispitagorico/sigkernel.git
 ```
 
-Requires PyTorch >=1.6.0, numba >= 0.50 and Cython >= 0.29.
+Requires PyTorch >=1.6.0, Numba >= 0.50 and Cython >= 0.29.
 
 ## Examples
 To run the specific examples in folder `./examples`, install the requirements with
