@@ -359,7 +359,7 @@ class _SigKernelGram(torch.autograd.Function):
         if X.device.type=='cuda':
 
             # Prepare the tensor of output solutions to the PDE (backward)
-            G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype) 
+            G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype) 
             G_rev[:,:,0,:] = 1.
             G_rev[:,:,:,0] = 1. 
 
