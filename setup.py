@@ -39,7 +39,7 @@ classifiers = ["Intended Audience :: Developers",
 
 python_requires = "~=3.6"
 
-install_requires = ["numba >= 0.50", "torch >= 1.6.0", "scikit-learn", "tslearn", "iisignature", "tqdm"]
+install_requires = ["cython >= 0.29", "numba >= 0.50", "torch >= 1.6.0"]
 
 ext_modules = [
     setuptools.Extension(
