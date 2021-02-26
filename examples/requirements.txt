@@ -1,0 +1,4 @@
+iisignature
+tslearn
+scikit-learn
+tqdm
