@@ -177,7 +177,7 @@ class _SigKernel(torch.autograd.Function):
 
         # if on CPU
         else:
-            K = torch.tensor(sig_kernel_batch_varpar(G_static_.detach().numpy(), _naive_solver))
+            K = torch.tensor(sig_kernel_batch_varpar(G_static_.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         ctx.save_for_backward(X,Y,G_static,K)
         ctx.static_kernel = static_kernel
@@ -233,7 +233,7 @@ class _SigKernel(torch.autograd.Function):
 
         # if on CPU
         else:
-            K_rev = torch.tensor(sig_kernel_batch_varpar(G_static_rev.detach().numpy(), _naive_solver))
+            K_rev = torch.tensor(sig_kernel_batch_varpar(G_static_rev.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         K_rev = flip(flip(K_rev,dim=1),dim=2)
         KK = K[:,:-1,:-1] * K_rev[:,1:,1:]     
@@ -241,7 +241,7 @@ class _SigKernel(torch.autograd.Function):
         # finite difference step 
         h = 1e-9
 
-        Xh = X[:,:,:,None] + h*torch.eye(D)[None,None,:]  
+        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]  
         Xh = Xh.permute(0,1,3,2)
         Xh = Xh.reshape(A,M*D,D)
 
@@ -316,7 +316,7 @@ class _SigKernelGram(torch.autograd.Function):
             G = G[:,:,:-1,:-1]
 
         else:
-            G = torch.tensor(sig_kernel_Gram_varpar(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype)
+            G = torch.tensor(sig_kernel_Gram_varpar(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         ctx.save_for_backward(X,Y,G,G_static)      
         ctx.sym = sym
@@ -377,7 +377,7 @@ class _SigKernelGram(torch.autograd.Function):
 
         # if on CPU
         else:
-            G_rev = torch.tensor(sig_kernel_Gram_varpar(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype)
+            G_rev = torch.tensor(sig_kernel_Gram_varpar(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         G_rev = flip(flip(G_rev,dim=2),dim=3)
         GG = G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]     
@@ -385,7 +385,7 @@ class _SigKernelGram(torch.autograd.Function):
         # finite difference step 
         h = 1e-9
 
-        Xh = X[:,:,:,None] + h*torch.eye(D)[None,None,:]  
+        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]  
         Xh = Xh.permute(0,1,3,2)
         Xh = Xh.reshape(A,M*D,D)
 
