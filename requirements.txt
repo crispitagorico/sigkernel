@@ -1,7 +1,0 @@
-joblib 
-matplotlib 
-scikit-learn
-scipy
-tqdm
-tslearn
-iisignature
