@@ -1,8 +1,6 @@
 import numpy as np
 import copy
 import math
-import iisignature
-from scipy.ndimage.interpolation import shift
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import as_float_array
 
