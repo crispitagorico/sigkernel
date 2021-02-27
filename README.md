@@ -39,15 +39,15 @@ y = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (b
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 k_batch = signature_kernel.compute_kernel(x,y)
 
-# Compute signature kernel Gram matrix (i.e. k(x_i,y_j) for i,j=1,...,batch). It works also for different batch_x != batch_y)
+# Compute signature kernel Gram matrix (i.e. k(x_i,y_j) for i,j=1,...,batch), also works for different batch_x != batch_y)
 k_batch = signature_kernel.compute_Gram(x,y,sym=False)
 
 # Compute MMD distance between samples x ~ P and samples y ~ Q, where P,Q are two distributions on path space
 d_mmd = signature_kernel.compute_mmd(x,y)
 
-# ... to backpropagate through the MMD distance simply call .backward(), like any other PyTorch loss function
+# and to backpropagate through the MMD distance simply call .backward(), like any other PyTorch loss function
 d_mmd.backward()
-
+```
 
 ## Examples for paper [The signature kernel is the solution of a Goursat PDE](https://arxiv.org/abs/2006.14794)
 To run the specific examples navigate to folder `./examples` and install the requirements with
