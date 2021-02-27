@@ -198,8 +198,6 @@ class _SigKernel(torch.autograd.Function):
         G_static_ = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:] 
         G_static_ = tile(tile(G_static_,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
-        print('201')
-
         A = X.shape[0]
         M = X.shape[1]
         N = Y.shape[1]
@@ -212,12 +210,8 @@ class _SigKernel(torch.autograd.Function):
         X_rev = torch.flip(X, dims=[1])
         Y_rev = torch.flip(Y, dims=[1])
 
-        print('215')
-
         # computing dsdt k(X_rev^i_s,Y_rev^i_t) for variation of parameters
         G_static_rev = flip(flip(G_static_,dim=1),dim=2)
-
-        print('220')
 
         # if on GPU
         if X.device.type=='cuda':
@@ -236,8 +230,6 @@ class _SigKernel(torch.autograd.Function):
                                                                                        MM+1, NN+1, n_anti_diagonals,
                                                                                        cuda.as_cuda_array(K_rev), _naive_solver)
 
-            print('239')
-
             K_rev = K_rev[:,:-1,:-1]      
 
         # if on CPU
@@ -247,8 +239,6 @@ class _SigKernel(torch.autograd.Function):
         K_rev = flip(flip(K_rev,dim=1),dim=2)
         KK = K[:,:-1,:-1] * K_rev[:,1:,1:]   
         
-        print('250')
-
         # finite difference step 
         h = 1e-9
 
@@ -256,13 +246,9 @@ class _SigKernel(torch.autograd.Function):
         Xh = Xh.permute(0,1,3,2)
         Xh = Xh.reshape(A,M*D,D)
 
-        print('259')
-
         G_h = static_kernel.batch_kernel(Xh,Y) 
         G_h = G_h.reshape(A,M,D,N)
         G_h = G_h.permute(0,1,3,2) 
-
-        print('265')
 
         Diff_1 = G_h[:,1:,1:,:] - G_h[:,1:,:-1,:] - (G_static[:,1:,1:])[:,:,:,None] + (G_static[:,1:,:-1])[:,:,:,None]
         Diff_1 =  tile( tile(Diff_1,1,2**dyadic_order)/float(2**dyadic_order),2, 2**dyadic_order)/float(2**dyadic_order)  
@@ -270,26 +256,18 @@ class _SigKernel(torch.autograd.Function):
         Diff_2 += - G_h[:,:-1,1:,:] + G_h[:,:-1,:-1,:] + (G_static[:,:-1,1:])[:,:,:,None] - (G_static[:,:-1,:-1])[:,:,:,None]
         Diff_2 = tile(tile(Diff_2,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)  
 
-        print('273')
-
         grad_1 = (KK[:,:,:,None] * Diff_1)/h
         grad_2 = (KK[:,:,:,None] * Diff_2)/h
-
-        print('278')
 
         grad_1 = torch.sum(grad_1,axis=2)
         grad_1 = torch.sum(grad_1.reshape(A,M-1,2**dyadic_order,D),axis=2)
         grad_2 = torch.sum(grad_2,axis=2)
         grad_2 = torch.sum(grad_2.reshape(A,M-1,2**dyadic_order,D),axis=2)
 
-        print('285')
-
         grad_prev = grad_1[:,:-1,:] + grad_2[:,1:,:]  # /¯¯
         grad_next = torch.cat([torch.zeros((A, 1, D), dtype=X.dtype, device=X.device), grad_1[:,1:,:]],dim=1)   # /
         grad_incr = grad_prev - grad_1[:,1:,:]
         grad_points = torch.cat([(grad_2[:,0,:]-grad_1[:,0,:])[:,None,:],grad_incr,grad_1[:,-1,:][:,None,:]],dim=1)
-
-        print('292')
 
         if Y.requires_grad:
             grad_points*=2
