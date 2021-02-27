@@ -4,7 +4,7 @@ import math
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import as_float_array
 
-def transform(paths, at=False, ll=False, scale=1e-1):
+def transform(paths, at=False, ll=False, scale=1.):
     paths = scale*paths
     if ll:
         paths = LeadLag().fit_transform(paths)
@@ -14,13 +14,13 @@ def transform(paths, at=False, ll=False, scale=1e-1):
 
 def normalize(sigs, width, depth):
     new_sigs = []
-    for sig in tqdm(sigs):
+    for sig in sigs:
         new_sig = np.zeros_like(sig)
         for k in range(depth):
             dim = width*(width**(k)-1)
             new_sig[dim:dim + width**(k+1)] = math.factorial(k+1)*sig[dim:dim + width**(k+1)]
         new_sigs.append(new_sig)
-    return new_sigs
+    return np.array(new_sigs)
 
 class AddTime(BaseEstimator, TransformerMixin):
     def __init__(self, init_time=0., total_time=1.):
