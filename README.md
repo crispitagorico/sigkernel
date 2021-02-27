@@ -3,7 +3,7 @@
 
 This library provides differentiable computation in PyTorch for the [signature-PDE-kernel](https://arxiv.org/abs/2006.14794) both on CPU and GPU. Automatic differentiation is done efficiently without backpropagating through the PDE solver.
 
-This allows to build state-of-the-art kernel-methods such as SVM or Gaussian Processes for complex, high-dimensional, irregularly-sampled, multivariate sequences of data.
+This allows to build state-of-the-art kernel-methods such as Support Vector Machines or Gaussian Processes for high-dimensional, irregularly-sampled, multivariate time series.
 
 ---
 
@@ -18,7 +18,6 @@ Requires PyTorch >=1.6.0, Numba >= 0.50 and Cython >= 0.29.
 ## How to use the library
 
 ```python
-import numpy as np
 import torch
 import sigkernel
 
