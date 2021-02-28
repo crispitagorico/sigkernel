@@ -1,7 +1,7 @@
 <h1 align='center'>sigkernel</h1>
 <h2 align='center'>Differentiable computations for the signature-PDE-kernel on CPU and GPU</h2>
 
-This library provides differentiable computation in PyTorch for the [signature-PDE-kernel](https://arxiv.org/abs/2006.14794) both on CPU and GPU. Automatic differentiation is done efficiently without backpropagating through the PDE solver.
+This library provides differentiable computation in PyTorch for the [signature-PDE-kernel](https://arxiv.org/abs/2006.14794) both on CPU and GPU. Automatic differentiation is done efficiently by solving a second "adjoint" PDE so without backpropagating through the PDE solver.
 
 This allows to build state-of-the-art kernel-methods such as Support Vector Machines or Gaussian Processes for high-dimensional, irregularly-sampled, multivariate time series.
 
