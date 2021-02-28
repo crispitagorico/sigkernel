@@ -28,7 +28,7 @@ static_kernel = sigkernel.RBFKernel(sigma=0.5)
 dyadic_order = 5
 
 # Initialize the corresponding signature kernel
-signature_kernel = sigkernel.SigKernel(static_kernel, dyadic_order, _naive_solver)
+signature_kernel = sigkernel.SigKernel(static_kernel, dyadic_order)
 
 # Synthetic data
 batch, len_x, len_y, dim = 5, 10, 20, 2
