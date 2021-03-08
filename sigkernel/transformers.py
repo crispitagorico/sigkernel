@@ -202,38 +202,36 @@ def brownian_perturbed(steps, width, time=1., amplitude=1.):
 
 
 #=============================================================================================
-# Truncated signature kernel from Kiraly
+# Truncated signature kernel from Kiraly and Oberhauser (provided to us by Gabor Toth)
 #=============================================================================================
 
-def truncated_sig_kernel(X, num_levels, order=-1, difference=True, sigma=1.):
+def truncated_sig_kernel(X, Y, num_levels, sigma=1., order=-1):
     """
     Computes the (truncated) signature kernel matrix of a given array of sequences. 
     
     Inputs:
-    :X: a numpy array of shape (num_seq, len_seq, num_feat) of num_seq sequences of equal length, len_seq, with num_feat coordinates
+    :X: a numpy array of shape (num_seq_X, len_seq_X, num_feat) of num_seq_X sequences of equal length, len_seq_X, with num_feat coordinates
+    :Y: a numpy array of shape (num_seq_Y, len_seq_Y, num_feat) of num_seq_Y sequences of equal length, len_seq_Y, with num_feat coordinates
     :num_levels: the number of signature levels used
-    :order: the order of the signature kernel as per Kiraly and Oberhauser, order=num_levels gives the full signature kernel, while order < num_levels gives a lower order approximation. Defaults to order=-1, which means order=num_levels
-    :difference: whether to difference the time series before computations (defaults to True)
     :sigma: a scalar or an np array of shape (num_levels+1); a multiplicative factor for each level
+    :order: the order of the signature kernel as per Kiraly and Oberhauser, order=num_levels gives the full signature kernel, while order < num_levels gives a lower order approximation. Defaults to order=-1, which means order=num_levels
     
     Output:
-    :K: a numpy array of shape (num_seq, num_seq)
+    :K: a numpy array of shape (num_seq_X, num_seq_Y)
     """
     order = num_levels if order < 1 else order
     sigma = sigma * np.ones((num_levels + 1,), dtype=X.dtype)
     
-    if difference:
-        X = np.diff(X, axis=1)
+    num_seq_X, len_seq_X, num_feat = X.shape
+    num_seq_Y, len_seq_Y, _ = Y.shape
     
-    num_seq, len_seq, num_feat = X.shape
-    
-    M = np.reshape(X.reshape((-1, num_feat)) @ X.reshape((-1, num_feat)).T, (num_seq, len_seq, num_seq, len_seq))
-    K = sigma[0] * np.ones((num_seq, num_seq), dtype=X.dtype) + sigma[1] * np.sum(M, axis=(1, 3))
+    M = np.reshape(X.reshape((-1, num_feat)) @ Y.reshape((-1, num_feat)).T, (num_seq_X, len_seq_X, num_seq_Y, len_seq_Y))
+    K = sigma[0] * np.ones((num_seq_X, num_seq_Y), dtype=X.dtype) + sigma[1] * np.sum(M, axis=(1, 3))
     R = M[None, None, ...]
     
     for m in range(1, num_levels):
         d = min(m+1, order)
-        R_next = np.empty((d, d, num_seq, len_seq, num_seq, len_seq), dtype=X.dtype)
+        R_next = np.empty((d, d, num_seq_X, len_seq_X, num_seq_Y, len_seq_Y), dtype=X.dtype)
         R_next[0, 0] = M * shift(np.cumsum(np.cumsum(np.sum(R, axis=(0, 1)), axis=1), axis=3), shift=(0, 1, 0, 1))
         for j in range(1, d):
             R_next[0, j] = 1./(j+1) * M * shift(np.cumsum(np.sum(R[:, j-1], axis=0), axis=1), shift=(0, 1, 0, 0))
