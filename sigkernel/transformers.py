@@ -194,13 +194,6 @@ def brownian(steps, width, time=1.):
     np.cumsum(white(steps, width, time), axis=0, out=path[1:, :])
     return path
 
-def brownian_perturbed(steps, width, time=1., amplitude=1.):
-    path = brownian(steps, width, time)
-    t = np.random.randint(steps)
-    path[t:] = path[t:] + amplitude
-    return path
-
-
 #=============================================================================================
 # Truncated signature kernel from Kiraly and Oberhauser (provided to us by Gabor Toth)
 #=============================================================================================

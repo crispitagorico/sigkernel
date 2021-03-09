@@ -33,11 +33,11 @@ _datasets = [
             ]
 
 _kernels =  [
-            'linear',
-            'rbf',
-            'gak',
+#             'linear',
+#             'rbf',
+#             'gak',
             'truncated signature',
-            'signature pde'
+#             'signature pde'
             ]
 
 if __name__ == '__main__':
@@ -45,6 +45,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-tr', '--train', help='True to retrain, False otherwise.', action='store_true')
     parser.add_argument('-te', '--test', help='True to repeat test, False otherwise.', action='store_true')
+    parser.add_argument('-p', '--print', help='True to print the latest test results, False otherwise.', action='store_true')
     args = parser.parse_args()
     
     #==================================================================================================
@@ -53,12 +54,16 @@ if __name__ == '__main__':
     if args.train:
 
         # store best models in training phase 
-        with open('./results/trained_models.pkl', 'rb') as file:
-            trained_models = pickle.load(file)        
+        try:
+            with open('../results/trained_models.pkl', 'rb') as file:
+                trained_models = pickle.load(file)    
+        except:
+            trained_models = {}    
 
         # define grid-search hyperparameters for SVC (common to all kernels)
         svc_parameters = {'C': np.logspace(0, 4, 5), 'gamma': list(np.logspace(-4, 4, 9)) + ['auto']}
         _sigmas = [1e-3, 5e-3, 1e-2, 2.5e-2, 5e-2, 7.5e-2, 1e-1, 2.5e-1, 5e-1, 7.5e-1, 1., 2., 5., 10.]
+        _scales = [5e-2, 1e-1, 5e-1, 1e0]
             
         # start grid-search
         datasets = tqdm(_datasets, position=0, leave=True)
@@ -120,35 +125,44 @@ if __name__ == '__main__':
                 dim  = x_train.shape[-1]
                 if dim <= 4:
                     max_depth = 6
-                elif dim <= 8:
+                elif dim <= 6:
                     max_depth = 5
-                elif dim <= 12:
+                elif dim <= 8:
                     max_depth = 4
                 else:
                     max_depth = 3
 
                 # grid search on truncation levels
                 depths = tqdm(range(2,max_depth+1), position=2, leave=False)
-                for d in depths:
-                    depths.set_description(f"truncated signature depth: {d}")
+                for depth in depths:
+                    depths.set_description(f"truncated signature depth: {depth}")
 
-                    # truncated signatures
-                    sig_train = iisignature.sig(x_train, d)
-
-                    # normalization
-                    sig_train = sigkernel.normalize(sig_train, x_train.shape[-1], d)
-
-                    # SVC tslearn estimator
-                    svc = SVC(kernel='linear', decision_function_shape='ovo')
-                    svc_model = GridSearchCV(estimator=svc, param_grid=svc_parameters, cv=5, n_jobs=-1)
-                    svc_model.fit(sig_train, y_train)
+                    scales = tqdm(_scales, position=3, leave=False)
+                    for scale in scales:
+                        scales.set_description(f"truncated signature scale: {scale}")
                     
-                    # store results
-                    if svc_model.best_score_ > best_scores_train['truncated signature']:
-                        best_scores_train['truncated signature'] = svc_model.best_score_
-                        trained_models[(name, 'truncated signature')] = (subsample, at, ll, d, svc_model)
+                        # truncated signatures
+                        sig_train = iisignature.sig(scale*x_train, depth)
+                        
+                        for ker_ in ['linear', 'rbf']:
+                            for normalize in [True, False]:
+                            
+                                # normalization
+                                if normalize:
+                                    sig_train = sigkernel.normalize(sig_train, x_train.shape[-1], depth)
+                        
+                                # SVC tslearn estimator
+                                svc = SVC(kernel=ker_, decision_function_shape='ovo')
+                                svc_model = GridSearchCV(estimator=svc, param_grid=svc_parameters, cv=5, n_jobs=-1)
+                                svc_model.fit(sig_train, y_train)
+                        
+                                # store results
+                                if svc_model.best_score_ > best_scores_train['truncated signature']:
+                                    best_scores_train['truncated signature'] = svc_model.best_score_
+                                    trained_models[(name, 'truncated signature')] = (subsample, at, ll, depth, scale, 
+                                                                                     ker_, normalize, svc_model)
 
-                    sleep(0.5)
+                        sleep(0.5)
 
                 #==================================================================================
                 # Signature PDE kernel
@@ -195,7 +209,7 @@ if __name__ == '__main__':
                     sleep(0.5)
 
             # save trained models
-            with open('./results/trained_models.pkl', 'wb') as file:
+            with open('../results/trained_models.pkl', 'wb') as file:
                 pickle.dump(trained_models, file)
 
 
@@ -205,12 +219,18 @@ if __name__ == '__main__':
     if args.test:
 
         # load trained models
-        with open('./results/trained_models.pkl', 'rb') as file:
-            trained_models = pickle.load(file)
+        try:
+            with open('../results/trained_models.pkl', 'rb') as file:
+                trained_models = pickle.load(file)
+        except:
+            print('Models need to be trained first')
 
-        # load final results from last run
-        with open('./results/final_results.pkl', 'rb') as file:
-            final_results = pickle.load(file)
+        # load final results from last run 
+        try:
+            with open('../results/final_results.pkl', 'rb') as file:
+                final_results = pickle.load(file)
+        except:
+            final_results = {}
 
         for name in _datasets:            
             for ker in _kernels:
@@ -245,16 +265,17 @@ if __name__ == '__main__':
                 elif ker == 'truncated signature':
                     
                     # extract information from training phase
-                    subsample, at, ll, d, estimator = trained_models[(name,ker)]
+                    subsample, at, ll, depth, scale, ker_, normalize, estimator = trained_models[(name,ker)]
                     
                     # path-transform and subsampling
-                    x_test = sigkernel.transform(x_test, at=at, ll=ll, scale=.1)[:,::subsample,:]
+                    x_test = sigkernel.transform(x_test, at=at, ll=ll, scale=scale*.1)[:,::subsample,:]
                     
                     # truncated signatures
-                    sig_test = iisignature.sig(x_test, d)
+                    sig_test = iisignature.sig(x_test, depth)
                     
                     # normalization
-                    sig_test = sigkernel.normalize(sig_test, x_test.shape[-1], d)
+                    if normalize:
+                        sig_test = sigkernel.normalize(sig_test, x_test.shape[-1], depth)
                     
                     # record scores
                     train_score = estimator.best_score_
@@ -307,15 +328,24 @@ if __name__ == '__main__':
                 sleep(0.5)
                 
                 if ker == 'truncated signature':
-                    print(name, ker, f'best truncation: {d}', final_results[name,ker])
+                    print(name, ker, f'best truncation: {depth}', f'best kernel: {ker_}', final_results[name,ker])
                 else:
                     print(name, ker, final_results[name,ker])
                 
             print('\n')
         
         # save results
-        with open('./results/final_results.pkl', 'wb') as file:
+        with open('../results/final_results.pkl', 'wb') as file:
             pickle.dump(final_results, file)
+    
+    #==================================================================================================
+    # Print latest test results
+    #==================================================================================================
+    if args.print:
+        with open('../results/final_results.pkl', 'rb') as file:
+            final = pickle.load(file)
+        print(final)
+        
 
 
 

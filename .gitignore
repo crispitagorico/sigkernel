@@ -262,7 +262,6 @@ __pycache__/
 /examples/.ipynb_checkpoints
 /examples/generative_model_S&P500.ipynb
 /examples/generative_model_Lotka_Volterra.ipynb
-/examples/perfomance_analysis.ipynb
 /examples/test_gradients.ipynb
 /data/Lotka_Volterra_x_data.pt
 /data/Lotka_Volterra_y_data.pt

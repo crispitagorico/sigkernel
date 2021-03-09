@@ -53,11 +53,31 @@ To run the specific examples navigate to folder `./examples` and install the req
 
 + `pip install -r requirements.txt`
 
+#### UEA time series classification
+To train all models and all datasets run (takes ~8 hours)
+
++ `python3 time_series_classification.py --train`
+
+To test all models and all datasets tun
+
++ `python3 time_series_classification.py --test`
+
+To print results final results run
+
++ `python3 time_series_classification.py --print`
+
+#### Bitcoin prices predictions
+Jupyter notebook `bitcoin_predictions.ipynb`.
+
+#### Recombination
+Jupyetr notebook `recombination.ipynb`.
+
+
 ## Citation
 
 ```bibtex
 @article{salvi2020computing,
-  title={The signature kernel is the solution of a Goursat PDE},
+  title={The Signature Kernel is the solution of a Goursat PDE},
   author={Salvi, Cristopher and Cass, Thomas and Foster, James and Lyons, Terry and Yang, Weixin},
   journal={arXiv preprint arXiv:2006.14794},
   year={2020}
