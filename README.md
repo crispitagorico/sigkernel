@@ -58,7 +58,7 @@ To train all models and all datasets run (takes ~8 hours)
 
 + `python3 time_series_classification.py --train`
 
-To test all models and all datasets tun
+To test all models and all datasets run 
 
 + `python3 time_series_classification.py --test`
 

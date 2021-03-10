@@ -33,11 +33,11 @@ _datasets = [
             ]
 
 _kernels =  [
-#             'linear',
-#             'rbf',
-#             'gak',
+            'linear',
+            'rbf',
+            'gak',
             'truncated signature',
-#             'signature pde'
+            'signature pde'
             ]
 
 if __name__ == '__main__':
