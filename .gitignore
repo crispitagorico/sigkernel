@@ -269,3 +269,4 @@ __pycache__/
 /data/S&P_500_y_data.pt
 /utils/sqrtm.py
 /results/trained_models.pkl
+/.idea
