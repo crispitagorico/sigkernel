@@ -14,8 +14,10 @@ def sig_kernel_batch_varpar(double[:,:,:] G_static, bint _naive_solver=False):
 	cdef double[:,:,:] K = np.zeros((A,M+1,N+1), dtype=np.float64)
 
 	for l in range(A):
+
 	    for i in range(M+1):
 		    K[l,i,0] = 1.
+
 		for j in range(N+1):
 		    K[l,0,j] = 1.
 
