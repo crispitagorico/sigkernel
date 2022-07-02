@@ -3,8 +3,8 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from cython_backend import sig_kernel_batch_varpar, sig_kernel_Gram_varpar
-from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
+from cython_backend import sig_kernel_batch_varpar, sig_kernel_derivative_batch_varpar, sig_kernel_Gram_varpar
+from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_derivative_batch_varpar_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
 
 
 # ===========================================================================================================
@@ -93,6 +93,72 @@ class SigKernel():
                   - vector k(X^i_T,Y^i_T) of shape (batch,)
         """
         return _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
+
+    def compute_kernel_and_derivative(self, X, Y, gamma):
+        """Input:
+                  - X: torch tensor of shape (batch, length_X, dim),
+                  - Y: torch tensor of shape (batch, length_Y, dim),
+                  - gamma: torch tensor of shape (batch, length_X, dim)
+           Output:
+                  - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
+        """
+
+        A = X.shape[0]
+        M = X.shape[1]
+        N = Y.shape[1]
+        D = X.shape[2]
+
+        MM = (2 ** self.dyadic_order) * (M - 1)
+        NN = (2 ** self.dyadic_order) * (N - 1)
+
+        G_static = self.static_kernel.batch_kernel(X, Y)
+        G_static_diff = self.static_kernel.batch_kernel(gamma, Y)
+
+        G_static_ = G_static[:, 1:, 1:] + G_static[:, :-1, :-1] - G_static[:, 1:, :-1] - G_static[:, :-1, 1:]
+        G_static_diff_ = G_static_diff[:, 1:, 1:] + G_static_diff[:, :-1, :-1] - G_static_diff[:, 1:,:-1] - G_static_diff[:, :-1, 1:]
+
+        G_static_ = tile(tile(G_static_, 1, 2 ** self.dyadic_order) / float(2 ** self.dyadic_order), 2,
+                         2 ** self.dyadic_order) / float(2 ** self.dyadic_order)
+        G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** self.dyadic_order) / float(2 ** self.dyadic_order), 2,
+                              2 ** self.dyadic_order) / float(2 ** self.dyadic_order)
+
+        # if on GPU
+        if X.device.type == 'cuda':
+
+            assert max(MM + 1,
+                       NN + 1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
+
+            # cuda parameters
+            threads_per_block = max(MM + 1, NN + 1)
+            n_anti_diagonals = 2 * threads_per_block - 1
+
+            # Prepare the tensor of output solutions to the PDE
+            K = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+            K_diff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+
+            K[:, 0, :] = 1.
+            K[:, :, 0] = 1.
+
+            K_diff[:, 0, :] = 0.
+            K_diff[:, :, 0] = 0.
+
+            # Compute the signature kernel and its derivative
+            compute_sig_kernel_derivative_batch_varpar_from_increments_cuda[A, threads_per_block](
+                cuda.as_cuda_array(G_static_.detach()),
+                cuda.as_cuda_array(G_static_diff_.detach()),
+                MM + 1, NN + 1, n_anti_diagonals,
+                cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff))
+
+            K = K[:, :-1, :-1]
+            K_diff = K_diff[:, :-1, :-1]
+
+        # if on CPU
+        else:
+            K = torch.tensor(sig_kernel_batch_varpar(G_static_.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
+            K_diff = torch.tensor(sig_kernel_derivative_batch_varpar(G_static_.detach().numpy(), G_static_diff_.detach().numpy()), dtype=G_static.dtype, device=G_static.device)
+
+        return K[:, -1, -1], K_diff[:, -1, -1]
+
 
     def compute_Gram(self, X, Y, sym=False):
         """Input: 
@@ -273,6 +339,7 @@ class _SigKernel(torch.autograd.Function):
             grad_points*=2
 
         return grad_output[:,None,None]*grad_points, None, None, None, None
+
 
 
 class _SigKernelGram(torch.autograd.Function):
