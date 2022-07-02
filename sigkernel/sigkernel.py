@@ -154,7 +154,7 @@ class SigKernel():
 
         # if on CPU
         else:
-            K = torch.tensor(sig_kernel_batch_varpar(G_static_.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
+            K = torch.tensor(sig_kernel_batch_varpar(G_static_.detach().numpy()), dtype=G_static.dtype, device=G_static.device)
             K_diff = torch.tensor(sig_kernel_derivative_batch_varpar(G_static_.detach().numpy(), G_static_diff_.detach().numpy()), dtype=G_static.dtype, device=G_static.device)
 
         return K[:, -1, -1], K_diff[:, -1, -1]
