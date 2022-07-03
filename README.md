@@ -62,10 +62,10 @@ MMD.backward()
 
 # Compute scoring rule between X and a sample path y, i.e. S_sig(X,y) = E[k(X,X)] - 2E[k(X,y] ...
 y = Y[0]
-scoring_rule = signature_kernel.compute_scoring_rule(X,y)
+SR = signature_kernel.compute_scoring_rule(X,y)
 
 # ... and expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
-expected_scoring_rule = signature_kernel.compute_expected_scoring_rule(X,Y)
+ESR = signature_kernel.compute_expected_scoring_rule(X,Y)
 ```
 
 ## Examples for paper [The signature kernel is the solution of a Goursat PDE](https://arxiv.org/abs/2006.14794)
