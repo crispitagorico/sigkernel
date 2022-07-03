@@ -187,7 +187,7 @@ class SigKernel():
     def compute_scoring_rule(self, X, y):
         """Input:
                   - X: torch tensor of shape (batch, length_X, dim),
-                  - Y: torch tensor of shape (1, length_Y, dim)
+                  - y: torch tensor of shape (1, length_Y, dim)
            Output:
                   - signature kernel scoring rule S(X,y) = E[k(X,X)] - 2E[k(X,y]
         """
@@ -216,7 +216,7 @@ class SigKernel():
         k_Xy = torch.zeros(batch_y)
 
         for y,i in zip(Y, range(batch_y)):
-            k_Xy[i] = self.compute_scoring_rule(X, y)
+            k_Xy[i] = self.compute_scoring_rule(X, y.unsqueeze(0))
 
         return torch.mean(k_Xy)
 
