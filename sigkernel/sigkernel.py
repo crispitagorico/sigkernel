@@ -123,10 +123,9 @@ class SigKernel():
                               2 ** self.dyadic_order) / float(2 ** self.dyadic_order)
 
         # if on GPU
-        if X.device.type == 'cuda':
+        if X.device.type in ['cuda', 'mps']:
 
-            assert max(MM + 1,
-                       NN + 1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
+            assert max(MM + 1, NN + 1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
             # cuda parameters
             threads_per_block = max(MM + 1, NN + 1)
@@ -222,7 +221,7 @@ class _SigKernel(torch.autograd.Function):
         G_static_ = tile(tile(G_static_,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
         # if on GPU
-        if X.device.type=='cuda':
+        if X.device.type in ['cuda', 'mps']:
 
             assert max(MM+1,NN+1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
             
@@ -280,7 +279,7 @@ class _SigKernel(torch.autograd.Function):
         G_static_rev = flip(flip(G_static_,dim=1),dim=2)
 
         # if on GPU
-        if X.device.type=='cuda':
+        if X.device.type in ['cuda', 'mps']:
 
             # Prepare the tensor of output solutions to the PDE (backward)
             K_rev = torch.zeros((A, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype) 
@@ -362,7 +361,7 @@ class _SigKernelGram(torch.autograd.Function):
         G_static_ = tile(tile(G_static_,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
 
         # if on GPU
-        if X.device.type=='cuda':
+        if X.device.type in ['cuda', 'mps']:
 
             assert max(MM,NN) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
@@ -424,7 +423,7 @@ class _SigKernelGram(torch.autograd.Function):
         G_static_rev = flip(flip(G_static_,dim=2),dim=3)
 
         # if on GPU
-        if X.device.type=='cuda':
+        if X.device.type in ['cuda', 'mps']:
 
             # Prepare the tensor of output solutions to the PDE (backward)
             G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype) 
@@ -497,7 +496,9 @@ def flip(x, dim):
     xsize = x.size()
     dim = x.dim() + dim if dim < 0 else dim
     x = x.view(-1, *xsize[dim:])
-    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1, -1, -1), ('cpu','cuda')[x.is_cuda])().long(), :]
+    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1, -1, -1), ('cpu',
+                                                                                        'cuda',
+                                                                                        'mps')[x.is_cuda or x.is_mps])().long(), :]
     return x.view(xsize)
 # ===========================================================================================================
 def tile(a, dim, n_tile):
