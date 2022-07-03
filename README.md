@@ -21,20 +21,25 @@ Requires PyTorch >=1.6.0, Numba >= 0.50 and Cython >= 0.29.
 import torch
 import sigkernel
 
+
 # Specify the static kernel (for linear kernel use sigkernel.LinearKernel())
 static_kernel = sigkernel.RBFKernel(sigma=0.5)
+
 
 # Specify dyadic order for PDE solver (int > 0, default 0, the higher the more accurate but slower)
 dyadic_order = 5
 
+
 # Initialize the corresponding signature kernel
 signature_kernel = sigkernel.SigKernel(static_kernel, dyadic_order)
+
 
 # Synthetic data
 batch, len_x, len_y, dim = 5, 10, 20, 2
 X = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_x,dim)
 Y = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
 G = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_x,dim)
+
 
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 K = signature_kernel.compute_kernel(X,Y)
@@ -43,14 +48,16 @@ K = signature_kernel.compute_kernel(X,Y)
 # where the directional derivatives are with respect to the first variable.
 K, K_diff = signature_kernel.compute_kernel_and_derivative(X,Y,G)
 
+
 # Compute signature kernel Gram matrix (i.e. k(x_i,y_j) for i,j=1,...,batch), also works for different batch_x != batch_y)
 K_Gram = signature_kernel.compute_Gram(X,Y,sym=False)
 
+
 # Compute MMD distance between samples x ~ X and samples y ~ Y, where X,Y are two distributions on path space
 MMD = signature_kernel.compute_mmd(X,Y)
-
 # and to backpropagate through the MMD distance simply call .backward(), like any other PyTorch loss function
 MMD.backward()
+
 
 # Compute scoring rule between X and a sample path y, i.e. S_sig(X,y) = E[k(X,X)] - 2E[k(X,y]
 y = Y[0]
