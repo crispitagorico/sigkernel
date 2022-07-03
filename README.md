@@ -39,9 +39,8 @@ G = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (b
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 K = signature_kernel.compute_kernel(X,Y)
 
-# Compute signature kernel and directional derivative along a batch of paths g: 
-# i.e. D_{g_1}k(x_1,y_1),...,D_{g_batch}k(x_batch, y_batch)), where the directional derivatives
-# are with respect to the first variable.
+# Compute signature kernel and directional derivative along a batch of paths g,  i.e. D_{g_1}k(x_1,y_1),...,D_{g_batch}k(x_batch, y_batch)), 
+# where the directional derivatives are with respect to the first variable.
 K, K_diff = signature_kernel.compute_kernel_and_derivative(X,Y,G)
 
 # Compute signature kernel Gram matrix (i.e. k(x_i,y_j) for i,j=1,...,batch), also works for different batch_x != batch_y)
@@ -59,7 +58,7 @@ scoring_rule = signature_kernel.compute_scoring_rule(X,y)
 
 # Compute expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
 y = Y[0]
-scoring_rule = signature_kernel.compute_scoring_rule(X,y)
+scoring_rule = signature_kernel.compute_expected_scoring_rule(X,y)
 ```
 
 ## Examples for paper [The signature kernel is the solution of a Goursat PDE](https://arxiv.org/abs/2006.14794)
