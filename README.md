@@ -44,6 +44,7 @@ G = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (b
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 K = signature_kernel.compute_kernel(X,Y)
 
+
 # Compute signature kernel and directional derivative along a batch of paths g,  i.e. D_{g_1}k(x_1,y_1),...,D_{g_batch}k(x_batch, y_batch)), 
 # where the directional derivatives are with respect to the first variable.
 K, K_diff = signature_kernel.compute_kernel_and_derivative(X,Y,G)
@@ -53,18 +54,16 @@ K, K_diff = signature_kernel.compute_kernel_and_derivative(X,Y,G)
 K_Gram = signature_kernel.compute_Gram(X,Y,sym=False)
 
 
-# Compute MMD distance between samples x ~ X and samples y ~ Y, where X,Y are two distributions on path space
+# Compute MMD distance between samples x ~ X and samples y ~ Y, where X,Y are two distributions on path space...
 MMD = signature_kernel.compute_mmd(X,Y)
-# and to backpropagate through the MMD distance simply call .backward(), like any other PyTorch loss function
+# ... and to backpropagate through the MMD distance simply call .backward(), like any other PyTorch loss function
 MMD.backward()
 
 
-# Compute scoring rule between X and a sample path y, i.e. S_sig(X,y) = E[k(X,X)] - 2E[k(X,y]
+# Compute scoring rule between X and a sample path y, i.e. S_sig(X,y) = E[k(X,X)] - 2E[k(X,y] ...
 y = Y[0]
 scoring_rule = signature_kernel.compute_scoring_rule(X,y)
-
-# Compute expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
-y = Y[0]
+# ... and expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
 scoring_rule = signature_kernel.compute_expected_scoring_rule(X,y)
 ```
 
