@@ -92,7 +92,17 @@ class SigKernel():
            Output: 
                   - vector k(X^i_T,Y^i_T) of shape (batch,)
         """
-        return _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
+        try:
+            K = _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
+        except RuntimeError:
+            cutoff = int(X.shape[0]/2)
+            X1, X2 = X[:cutoff], X[cutoff:]
+            Y1, Y2 = Y[:cutoff], Y[cutoff:]
+            K1 = self.compute_kernel(X1,Y1)
+            K2 = self.compute_kernel(X2,Y2)
+            K = torch.cat((K1,K2),0)
+        return K
+
 
     def compute_kernel_and_derivative(self, X, Y, gamma):
         """Input:
