@@ -177,7 +177,22 @@ class SigKernel():
            Output: 
                   - matrix k(X^i_T,Y^j_T) of shape (batch_X, batch_Y)
         """
-        return _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
+
+        try:
+            K = _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
+        except RuntimeError:
+            cutoff1 = int(X.shape[0]/2)
+            cutoff2 = int(Y.shape[0]/2)
+            X1, X2 = X[:cutoff1], X[cutoff1:]
+            Y1, Y2 = Y[:cutoff2], Y[cutoff2:]
+            K11 = self.compute_kernel(X1,Y1)
+            K12 = self.compute_kernel(X1,Y2)
+            K21 = self.compute_kernel(X2,Y1)
+            K22 = self.compute_kernel(X2,Y2)
+            K_up = torch.cat((K11,K12),1)
+            K_down = torch.cat((K21,K22), 1)
+            K = torch.cat((K_up,K_down),0)
+        return K
 
     def compute_distance(self, X, Y):
         """Input: 
