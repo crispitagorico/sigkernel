@@ -94,13 +94,15 @@ class SigKernel():
         """
         try:
             K = _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
-        except:
-            cutoff = int(X.shape[0]/2)
-            X1, X2 = X[:cutoff], X[cutoff:]
-            Y1, Y2 = Y[:cutoff], Y[cutoff:]
+        except RuntimeError:
+            cutoff = int(X.shape[0]/4)
+            X1, X2, X3, X4 = X[:cutoff], X[cutoff:2*cutoff], X[2*cutoff:3*cutoff], X[3*cutoff:]
+            Y1, Y2, Y3, Y4 = Y[:cutoff], Y[cutoff:2*cutoff], Y[2*cutoff:3*cutoff], Y[3*cutoff:]
             K1 = self.compute_kernel(X1,Y1)
             K2 = self.compute_kernel(X2,Y2)
-            K = torch.cat((K1,K2),0)
+            K3 = self.compute_kernel(X3,Y3)
+            K4 = self.compute_kernel(X4,Y4)
+            K = torch.cat((K1,K2,K3,K4),0)
         return K
 
 
