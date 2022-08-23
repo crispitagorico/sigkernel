@@ -95,14 +95,14 @@ class SigKernel():
         try:
             K = _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
         except RuntimeError:
-            cutoff = int(X.shape[0]/4)
-            X1, X2, X3, X4 = X[:cutoff], X[cutoff:2*cutoff], X[2*cutoff:3*cutoff], X[3*cutoff:]
-            Y1, Y2, Y3, Y4 = Y[:cutoff], Y[cutoff:2*cutoff], Y[2*cutoff:3*cutoff], Y[3*cutoff:]
-            K1 = self.compute_kernel(X1,Y1)
-            K2 = self.compute_kernel(X2,Y2)
-            K3 = self.compute_kernel(X3,Y3)
-            K4 = self.compute_kernel(X4,Y4)
-            K = torch.cat((K1,K2,K3,K4),0)
+            folds = 10
+            cutoff = int(X.shape[0]/folds)
+            K_ = []
+            for i in range(folds):
+                Xi = X[i*cutoff:(i+1)*cutoff]
+                Yi = Y[i*cutoff:(i+1)*cutoff]
+                K_.append(self.compute_kernel(Xi,Yi))
+            K = torch.cat(K_,0)
         return K
 
 
