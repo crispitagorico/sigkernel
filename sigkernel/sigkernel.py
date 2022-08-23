@@ -210,16 +210,10 @@ class SigKernel():
 
         assert not Y.requires_grad, "the second input should not require grad"
 
-        k_XX = self.compute_kernel(X, X)
+        K_XX = self.compute_Gram(X, X, sym=True)
+        K_XY = self.compute_Gram(X, Y, sym=False)
 
-        batch_y = Y.shape[0]
-
-        k_Xy = torch.zeros(batch_y)
-
-        for y,i in zip(Y, range(batch_y)):
-            k_Xy[i] = self.compute_scoring_rule(X, y.unsqueeze(0))
-
-        return torch.mean(k_Xy)
+        return torch.mean(K_XX) - 2.*torch.mean(K_XY)
 
     def compute_mmd(self, X, Y):
         """Input: 
