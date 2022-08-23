@@ -94,7 +94,7 @@ class SigKernel():
         """
         try:
             K = _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
-        except RuntimeError:
+        except:
             cutoff = int(X.shape[0]/2)
             X1, X2 = X[:cutoff], X[cutoff:]
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
@@ -125,6 +125,7 @@ class SigKernel():
             K = torch.cat((K1, K2), 0)
             K_grad = torch.cat((K_grad1, K_grad2), 0)
         return K, K_grad
+
 
     def compute_Gram(self, X, Y, sym=False):
         """Input: 
