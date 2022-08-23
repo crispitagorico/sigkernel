@@ -94,7 +94,7 @@ class SigKernel():
         """
         try:
             K = _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
-        except RuntimeError:
+        except (RuntimeError, CudaAPIError):
             cutoff = int(X.shape[0]/2)
             X1, X2 = X[:cutoff], X[cutoff:]
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
