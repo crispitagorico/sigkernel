@@ -110,65 +110,21 @@ class SigKernel():
                   - Y: torch tensor of shape (batch, length_Y, dim),
                   - gamma: torch tensor of shape (batch, length_X, dim)
            Output:
+                  - vector of shape (batch,) of kernel evaluations k_gamma(X^i_T,Y^i_T)
                   - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
         """
 
-        A = X.shape[0]
-        M = X.shape[1]
-        N = Y.shape[1]
-        D = X.shape[2]
-
-        MM = (2 ** self.dyadic_order) * (M - 1)
-        NN = (2 ** self.dyadic_order) * (N - 1)
-
-        G_static = self.static_kernel.batch_kernel(X, Y)
-        G_static_diff = self.static_kernel.batch_kernel(gamma, Y)
-
-        G_static_ = G_static[:, 1:, 1:] + G_static[:, :-1, :-1] - G_static[:, 1:, :-1] - G_static[:, :-1, 1:]
-        G_static_diff_ = G_static_diff[:, 1:, 1:] + G_static_diff[:, :-1, :-1] - G_static_diff[:, 1:,:-1] - G_static_diff[:, :-1, 1:]
-
-        G_static_ = tile(tile(G_static_, 1, 2 ** self.dyadic_order) / float(2 ** self.dyadic_order), 2,
-                         2 ** self.dyadic_order) / float(2 ** self.dyadic_order)
-        G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** self.dyadic_order) / float(2 ** self.dyadic_order), 2,
-                              2 ** self.dyadic_order) / float(2 ** self.dyadic_order)
-
-        # if on GPU
-        if X.device.type in ['cuda']:
-
-            assert max(MM + 1, NN + 1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
-
-            # cuda parameters
-            threads_per_block = max(MM + 1, NN + 1)
-            n_anti_diagonals = 2 * threads_per_block - 1
-
-            # Prepare the tensor of output solutions to the PDE
-            K = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
-            K_diff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
-
-            K[:, 0, :] = 1.
-            K[:, :, 0] = 1.
-
-            K_diff[:, 0, :] = 0.
-            K_diff[:, :, 0] = 0.
-
-            # Compute the signature kernel and its derivative
-            compute_sig_kernel_derivative_batch_varpar_from_increments_cuda[A, threads_per_block](
-                cuda.as_cuda_array(G_static_.detach()),
-                cuda.as_cuda_array(G_static_diff_.detach()),
-                MM + 1, NN + 1, n_anti_diagonals,
-                cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff))
-
-            K = K[:, :-1, :-1]
-            K_diff = K_diff[:, :-1, :-1]
-
-        # if on CPU
-        else:
-            K, K_diff = sig_kernel_derivative_batch_varpar(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
-            K = torch.tensor(K, dtype=G_static.dtype, device=G_static.device)
-            K_diff = torch.tensor(K_diff, dtype=G_static.dtype, device=G_static.device)
-
-        return K[:, -1, -1], K_diff[:, -1, -1]
-
+        try:
+            K, K_grad = k_kgrad(X, Y, gamma, self.dyadic_order, self.static_kernel)
+        except RuntimeError:
+            cutoff = int(X.shape[0] / 2)
+            X1, X2 = X[:cutoff], X[cutoff:]
+            Y1, Y2 = Y[:cutoff], Y[cutoff:]
+            K1, K_grad1 = self.compute_kernel_and_derivative(X1, Y1, gamma)
+            K2, K_grad2 = self.compute_kernel_and_derivative(X2, Y2, gamma)
+            K = torch.cat((K1, K2), 0)
+            K_grad = torch.cat((K_grad1, K_grad2), 0)
+        return K, K_grad
 
     def compute_Gram(self, X, Y, sym=False):
         """Input: 
@@ -180,7 +136,7 @@ class SigKernel():
 
         try:
             K = _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
-        except:
+        except RuntimeError:
             cutoff1 = int(X.shape[0]/2)
             cutoff2 = int(Y.shape[0]/2)
             X1, X2 = X[:cutoff1], X[cutoff1:]
@@ -190,7 +146,7 @@ class SigKernel():
             K21 = self.compute_Gram(X2,Y1)
             K22 = self.compute_Gram(X2,Y2)
             K_up = torch.cat((K11,K12),1)
-            K_down = torch.cat((K21,K22), 1)
+            K_down = torch.cat((K21,K22),1)
             K = torch.cat((K_up,K_down),0)
         return K
 
@@ -543,6 +499,72 @@ class _SigKernelGram(torch.autograd.Function):
             return grad, None, None, None, None, None
 # ===========================================================================================================
 
+
+
+def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
+    """Input:
+              - X: torch tensor of shape (batch, length_X, dim),
+              - Y: torch tensor of shape (batch, length_Y, dim),
+              - gamma: torch tensor of shape (batch, length_X, dim)
+       Output:
+              - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
+    """
+
+    A = X.shape[0]
+    M = X.shape[1]
+    N = Y.shape[1]
+    D = X.shape[2]
+
+    MM = (2 ** dyadic_order) * (M - 1)
+    NN = (2 ** dyadic_order) * (N - 1)
+
+    G_static = static_kernel.batch_kernel(X, Y)
+    G_static_diff = static_kernel.batch_kernel(gamma, Y)
+
+    G_static_ = G_static[:, 1:, 1:] + G_static[:, :-1, :-1] - G_static[:, 1:, :-1] - G_static[:, :-1, 1:]
+    G_static_diff_ = G_static_diff[:, 1:, 1:] + G_static_diff[:, :-1, :-1] - G_static_diff[:, 1:,:-1] - G_static_diff[:, :-1, 1:]
+
+    G_static_ = tile(tile(G_static_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2,
+                     2 ** dyadic_order) / float(2 ** dyadic_order)
+    G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2,
+                          2 ** dyadic_order) / float(2 ** dyadic_order)
+
+    # if on GPU
+    if X.device.type in ['cuda']:
+
+        assert max(MM + 1, NN + 1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
+
+        # cuda parameters
+        threads_per_block = max(MM + 1, NN + 1)
+        n_anti_diagonals = 2 * threads_per_block - 1
+
+        # Prepare the tensor of output solutions to the PDE
+        K = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K_diff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+
+        K[:, 0, :] = 1.
+        K[:, :, 0] = 1.
+
+        K_diff[:, 0, :] = 0.
+        K_diff[:, :, 0] = 0.
+
+        # Compute the signature kernel and its derivative
+        compute_sig_kernel_derivative_batch_varpar_from_increments_cuda[A, threads_per_block](
+            cuda.as_cuda_array(G_static_.detach()),
+            cuda.as_cuda_array(G_static_diff_.detach()),
+            MM + 1, NN + 1, n_anti_diagonals,
+            cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff))
+
+        K = K[:, :-1, :-1]
+        K_diff = K_diff[:, :-1, :-1]
+
+    # if on CPU
+    else:
+        K, K_diff = sig_kernel_derivative_batch_varpar(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
+        K = torch.tensor(K, dtype=G_static.dtype, device=G_static.device)
+        K_diff = torch.tensor(K_diff, dtype=G_static.dtype, device=G_static.device)
+
+    return K[:, -1, -1], K_diff[:, -1, -1]
 
 
 # ===========================================================================================================
