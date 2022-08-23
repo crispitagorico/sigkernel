@@ -185,10 +185,10 @@ class SigKernel():
             cutoff2 = int(Y.shape[0]/2)
             X1, X2 = X[:cutoff1], X[cutoff1:]
             Y1, Y2 = Y[:cutoff2], Y[cutoff2:]
-            K11 = self.compute_kernel(X1,Y1)
-            K12 = self.compute_kernel(X1,Y2)
-            K21 = self.compute_kernel(X2,Y1)
-            K22 = self.compute_kernel(X2,Y2)
+            K11 = self.compute_Gram(X1,Y1)
+            K12 = self.compute_Gram(X1,Y2)
+            K21 = self.compute_Gram(X2,Y1)
+            K22 = self.compute_Gram(X2,Y2)
             K_up = torch.cat((K11,K12),1)
             K_down = torch.cat((K21,K22), 1)
             K = torch.cat((K_up,K_down),0)
