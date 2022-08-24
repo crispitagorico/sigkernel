@@ -85,26 +85,27 @@ class SigKernel():
         self.dyadic_order = dyadic_order
         self._naive_solver = _naive_solver
 
-    def compute_kernel(self, X, Y):
+    def compute_kernel(self, X, Y, max_batch=100):
         """Input: 
                   - X: torch tensor of shape (batch, length_X, dim),
                   - Y: torch tensor of shape (batch, length_Y, dim)
            Output: 
                   - vector k(X^i_T,Y^i_T) of shape (batch,)
         """
-        try:
+        batch = X.shape[0]
+        if batch <= max_batch:
             K = _SigKernel.apply(X, Y, self.static_kernel, self.dyadic_order, self._naive_solver)
-        except RuntimeError:
-            cutoff = int(X.shape[0]/2)
-            X1,X2 = X[:cutoff],X[cutoff:]
-            Y1,Y2 = Y[:cutoff],Y[cutoff:]
-            K1 = self.compute_kernel(X1,Y1)
-            K2 = self.compute_kernel(X2,Y2)
-            K = torch.cat((K1,K2),0)
+        else:
+            cutoff = int(batch/2)
+            X1, X2 = X[:cutoff], X[cutoff:]
+            Y1, Y2 = Y[:cutoff], Y[cutoff:]
+            K1 = self.compute_kernel(X1, Y1, max_batch)
+            K2 = self.compute_kernel(X2, Y2, max_batch)
+            K = torch.cat((K1, K2), 0)
         return K
 
 
-    def compute_kernel_and_derivative(self, X, Y, gamma):
+    def compute_kernel_and_derivative(self, X, Y, gamma, max_batch=100):
         """Input:
                   - X: torch tensor of shape (batch, length_X, dim),
                   - Y: torch tensor of shape (batch, length_Y, dim),
@@ -114,20 +115,21 @@ class SigKernel():
                   - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
         """
 
-        try:
+        batch = X.shape[0]
+        if batch <= max_batch:
             K, K_grad = k_kgrad(X, Y, gamma, self.dyadic_order, self.static_kernel)
-        except RuntimeError:
-            cutoff = int(X.shape[0] / 2)
+        else:
+            cutoff = int(batch/2)
             X1, X2 = X[:cutoff], X[cutoff:]
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
-            K1, K_grad1 = self.compute_kernel_and_derivative(X1, Y1, gamma)
-            K2, K_grad2 = self.compute_kernel_and_derivative(X2, Y2, gamma)
+            K1, K_grad1 = self.compute_kernel_and_derivative(X1, Y1, gamma, max_batch)
+            K2, K_grad2 = self.compute_kernel_and_derivative(X2, Y2, gamma, max_batch)
             K = torch.cat((K1, K2), 0)
             K_grad = torch.cat((K_grad1, K_grad2), 0)
         return K, K_grad
 
 
-    def compute_Gram(self, X, Y, sym=False):
+    def compute_Gram(self, X, Y, sym=False, max_batch=100):
         """Input: 
                   - X: torch tensor of shape (batch_X, length_X, dim),
                   - Y: torch tensor of shape (batch_Y, length_Y, dim)
@@ -135,17 +137,18 @@ class SigKernel():
                   - matrix k(X^i_T,Y^j_T) of shape (batch_X, batch_Y)
         """
 
-        try:
+        batch = X.shape[0]
+        if batch <= max_batch:
             K = _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
-        except RuntimeError:
-            cutoff = int(X.shape[0]/2)
+        else:
+            cutoff = int(batch/2)
             X1, X2 = X[:cutoff], X[cutoff:]
-            K1 = self.compute_Gram(X1,Y)
-            K2 = self.compute_Gram(X2,Y)
-            K = torch.cat((K1,K2),0)
+            K1 = self.compute_Gram(X1, Y, max_batch)
+            K2 = self.compute_Gram(X2, Y, max_batch)
+            K = torch.cat((K1, K2), 0)
         return K
 
-    def compute_distance(self, X, Y):
+    def compute_distance(self, X, Y, max_batch=100):
         """Input: 
                   - X: torch tensor of shape (batch, length_X, dim),
                   - Y: torch tensor of shape (batch, length_Y, dim)
@@ -155,13 +158,13 @@ class SigKernel():
         
         assert not Y.requires_grad, "the second input should not require grad"
 
-        k_XX = self.compute_kernel(X, X)
-        k_YY = self.compute_kernel(Y, Y)
-        k_XY = self.compute_kernel(X, Y)
+        k_XX = self.compute_kernel(X, X, max_batch)
+        k_YY = self.compute_kernel(Y, Y, max_batch)
+        k_XY = self.compute_kernel(X, Y, max_batch)
 
         return torch.mean(k_XX) + torch.mean(k_YY) - 2.*torch.mean(k_XY)
 
-    def compute_scoring_rule(self, X, y):
+    def compute_scoring_rule(self, X, y, max_batch=100):
         """Input:
                   - X: torch tensor of shape (batch, length_X, dim),
                   - y: torch tensor of shape (1, length_Y, dim)
@@ -171,12 +174,12 @@ class SigKernel():
 
         assert not y.requires_grad, "the second input should not require grad"
 
-        k_XX = self.compute_Gram(X, X, sym=True)
-        k_Xy = self.compute_Gram(X, y, sym=False)
+        k_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
+        k_Xy = self.compute_Gram(X, y, sym=False, max_batch=max_batch)
 
         return torch.mean(k_XX) - 2. * torch.mean(k_Xy)
 
-    def compute_expected_scoring_rule(self, X, Y):
+    def compute_expected_scoring_rule(self, X, Y, max_batch=100):
         """Input:
                   - X: torch tensor of shape (batch_X, length_X, dim),
                   - Y: torch tensor of shape (batch_Y, length_Y, dim)
@@ -186,12 +189,12 @@ class SigKernel():
 
         assert not Y.requires_grad, "the second input should not require grad"
 
-        K_XX = self.compute_Gram(X, X, sym=True)
-        K_XY = self.compute_Gram(X, Y, sym=False)
+        K_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
+        K_XY = self.compute_Gram(X, Y, sym=False, max_batch=max_batch)
 
         return torch.mean(K_XX) - 2.*torch.mean(K_XY)
 
-    def compute_mmd(self, X, Y):
+    def compute_mmd(self, X, Y, max_batch=100):
         """Input: 
                   - X: torch tensor of shape (batch_X, length_X, dim),
                   - Y: torch tensor of shape (batch_Y, length_Y, dim)
@@ -201,9 +204,9 @@ class SigKernel():
 
         assert not Y.requires_grad, "the second input should not require grad"
 
-        K_XX = self.compute_Gram(X, X, sym=True)
-        K_YY = self.compute_Gram(Y, Y, sym=True)
-        K_XY = self.compute_Gram(X, Y, sym=False)
+        K_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
+        K_YY = self.compute_Gram(Y, Y, sym=True, max_batch=max_batch)
+        K_XY = self.compute_Gram(X, Y, sym=False, max_batch=max_batch)
 
         return torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
 
