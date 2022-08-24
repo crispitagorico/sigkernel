@@ -138,15 +138,34 @@ class SigKernel():
                   - matrix k(X^i_T,Y^j_T) of shape (batch_X, batch_Y)
         """
 
-        batch = Y.shape[0]
-        if batch <= max_batch:
+        batch_X = X.shape[0]
+        batch_Y = Y.shape[0]
+        if batch_X <= max_batch and batch_Y <= max_batch:
             K = _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
-        else:
-            cutoff = int(batch/2)
+        elif batch_X <= max_batch and batch_Y > max_batch:
+            cutoff = int(batch_Y/2)
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
-            K1 = self.compute_Gram(X, Y1, sym, max_batch)
-            K2 = self.compute_Gram(X, Y2, sym, max_batch)
+            K1 = self.compute_Gram(X, Y1, False, max_batch)
+            K2 = self.compute_Gram(X, Y2, False, max_batch)
             K = torch.cat((K1, K2), 1)
+        elif batch_X > max_batch and batch_Y <= max_batch:
+            cutoff = int(batch_X/2)
+            X1, X2 = X[:cutoff], X[cutoff:]
+            K1 = self.compute_Gram(X1, Y, False, max_batch)
+            K2 = self.compute_Gram(X2, Y, False, max_batch)
+            K = torch.cat((K1, K2), 0)
+        else:
+            cutoff_X = int(batch_X/2)
+            cutoff_Y = int(batch_Y/2)
+            X1, X2 = X[:cutoff_X], X[cutoff_X:]
+            Y1, Y2 = Y[:cutoff_Y], Y[cutoff_Y:]
+            K11 = self.compute_Gram(X1, Y1, False, max_batch)
+            K12 = self.compute_Gram(X1, Y2, False, max_batch)
+            K21 = self.compute_Gram(X2, Y1, False, max_batch)
+            K22 = self.compute_Gram(X2, Y2, False, max_batch)
+            K_top = torch.cat((K11, K12), 1)
+            K_bottom = torch.cat((K21, K22), 1)
+            K = torch.cat((K_top, K_bottom), 0)
         return K
 
     def compute_distance(self, X, Y, max_batch=100):
