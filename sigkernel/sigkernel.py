@@ -138,14 +138,14 @@ class SigKernel():
                   - matrix k(X^i_T,Y^j_T) of shape (batch_X, batch_Y)
         """
 
-        batch = Y.shape[0]
+        batch = X.shape[0]
         if batch <= max_batch:
             K = _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
         else:
             cutoff = int(batch/2)
-            Y1, Y2 = Y[:cutoff], Y[cutoff:]
-            K1 = self.compute_Gram(X, Y1, max_batch)
-            K2 = self.compute_Gram(X, Y2, max_batch)
+            X1, X2 = X[:cutoff], X[cutoff:]
+            K1 = self.compute_Gram(X1, Y, max_batch)
+            K2 = self.compute_Gram(X2, Y, max_batch)
             K = torch.cat((K1, K2), 0)
         return K
 
