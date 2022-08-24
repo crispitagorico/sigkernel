@@ -27,7 +27,7 @@ static_kernel = sigkernel.RBFKernel(sigma=0.5)
 
 
 # Specify dyadic order for PDE solver (int > 0, default 0, the higher the more accurate but slower)
-dyadic_order = 5
+dyadic_order = 1
 
 
 # Initialize the corresponding signature kernel
@@ -40,32 +40,34 @@ X = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (b
 Y = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
 G = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_x,dim)
 
+# Specify maximum batch size of computation; if memory is a concern try reducing max_batch, default=100
+max_batch = 100
 
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
-sk = signature_kernel.compute_kernel(X,Y)
+sk = signature_kernel.compute_kernel(X,Y,max_batch)
 
 
 # Compute signature kernel and directional derivative along a batch of paths g,  i.e. D_{g_1}k(x_1,y_1),...,D_{g_batch}k(x_batch, y_batch)), 
 # where the directional derivatives are with respect to the first variable.
-sk, sk_diff = signature_kernel.compute_kernel_and_derivative(X,Y,G)
+sk, sk_diff = signature_kernel.compute_kernel_and_derivative(X,Y,G,max_batch)
 
 
 # Compute signature kernel Gram matrix (i.e. k(x_i,y_j) for i,j=1,...,batch), also works for different batch_x != batch_y)
-g_mat = signature_kernel.compute_Gram(X,Y,sym=False)
+g_mat = signature_kernel.compute_Gram(X,Y,sym=False,max_batch)
 
 
 # Compute MMD distance between samples x ~ X and samples y ~ Y, where X,Y are two distributions on path space...
-mmd = signature_kernel.compute_mmd(X,Y)
+mmd = signature_kernel.compute_mmd(X,Y,max_batch)
 # ... and to backpropagate through the MMD distance simply call .backward(), like any other PyTorch loss function
 mmd.backward()
 
 
 # Compute scoring rule between X and a sample path y, i.e. S_sig(X,y) = E[k(X,X)] - 2E[k(X,y] ...
 y = Y[0]
-sr = signature_kernel.compute_scoring_rule(X,y)
+sr = signature_kernel.compute_scoring_rule(X,y,max_batch)
 
 # ... and expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
-esr = signature_kernel.compute_expected_scoring_rule(X,Y)
+esr = signature_kernel.compute_expected_scoring_rule(X,Y,max_batch)
 ```
 
 ## Examples for paper [The signature kernel is the solution of a Goursat PDE](https://arxiv.org/abs/2006.14794)
