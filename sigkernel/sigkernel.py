@@ -144,8 +144,8 @@ class SigKernel():
         else:
             cutoff = int(batch/2)
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
-            K1 = self.compute_Gram(X, Y1, max_batch)
-            K2 = self.compute_Gram(X, Y2, max_batch)
+            K1 = self.compute_Gram(X, Y1, sym, max_batch)
+            K2 = self.compute_Gram(X, Y2, sym, max_batch)
             K = torch.cat((K1, K2), 1)
         return K
 
