@@ -143,7 +143,7 @@ class SigKernel():
             K = _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
         else:
             cutoff = int(batch/2)
-            Y1, Y2 = X[:cutoff], X[cutoff:]
+            Y1, Y2 = Y[:cutoff], Y[cutoff:]
             K1 = self.compute_Gram(X, Y1, max_batch)
             K2 = self.compute_Gram(X, Y2, max_batch)
             K = torch.cat((K1, K2), 0)
