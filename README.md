@@ -30,6 +30,10 @@ static_kernel = sigkernel.RBFKernel(sigma=0.5)
 dyadic_order = 1
 
 
+# Specify maximum batch size of computation; if memory is a concern try reducing max_batch, default=100
+max_batch = 100
+
+
 # Initialize the corresponding signature kernel
 signature_kernel = sigkernel.SigKernel(static_kernel, dyadic_order)
 
@@ -40,8 +44,6 @@ X = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (b
 Y = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
 G = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_x,dim)
 
-# Specify maximum batch size of computation; if memory is a concern try reducing max_batch, default=100
-max_batch = 100
 
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 sk = signature_kernel.compute_kernel(X,Y,max_batch)

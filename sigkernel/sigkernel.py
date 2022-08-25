@@ -228,7 +228,10 @@ class SigKernel():
         K_YY = self.compute_Gram(Y, Y, sym=True, max_batch=max_batch)
         K_XY = self.compute_Gram(X, Y, sym=False, max_batch=max_batch)
 
-        return torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
+        K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
+        K_YY_m = (torch.sum(K_YY) - torch.sum(torch.diag(K_YY))) / (K_YY.shape[0] * (K_YY.shape[0] - 1.))
+
+        return K_XX_m + K_YY_m - 2. * torch.mean(K_XY)
 
 
 class _SigKernel(torch.autograd.Function):
@@ -354,9 +357,9 @@ class _SigKernel(torch.autograd.Function):
         grad_1 = (KK[:,:,:,None] * Diff_1)/h
         grad_2 = (KK[:,:,:,None] * Diff_2)/h
 
-        grad_1 = torch.sum(grad_1,axis=2)
+        grad_1 = torch.sum(grad_1, axis=2)
         grad_1 = torch.sum(grad_1.reshape(A,M-1,2**dyadic_order,D),axis=2)
-        grad_2 = torch.sum(grad_2,axis=2)
+        grad_2 = torch.sum(grad_2, axis=2)
         grad_2 = torch.sum(grad_2.reshape(A,M-1,2**dyadic_order,D),axis=2)
 
         grad_prev = grad_1[:,:-1,:] + grad_2[:,1:,:]  # /¯¯
