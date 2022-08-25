@@ -199,7 +199,7 @@ class SigKernel():
 
         K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
 
-        return K_XX_m - 2. * torch.mean(k_Xy)
+        return K_XX_m - 2. * torch.mean(K_Xy)
 
     def compute_expected_scoring_rule(self, X, Y, max_batch=100):
         """Input:
