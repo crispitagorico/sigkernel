@@ -197,7 +197,9 @@ class SigKernel():
         k_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
         k_Xy = self.compute_Gram(X, y, sym=False, max_batch=max_batch)
 
-        return torch.mean(k_XX) - 2. * torch.mean(k_Xy)
+        K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
+
+        return K_XX_m - 2. * torch.mean(k_Xy)
 
     def compute_expected_scoring_rule(self, X, Y, max_batch=100):
         """Input:
@@ -212,7 +214,9 @@ class SigKernel():
         K_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
         K_XY = self.compute_Gram(X, Y, sym=False, max_batch=max_batch)
 
-        return torch.mean(K_XX) - 2.*torch.mean(K_XY)
+        K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
+
+        return K_XX_m - 2.*torch.mean(K_XY)
 
     def compute_mmd(self, X, Y, max_batch=100):
         """Input: 
