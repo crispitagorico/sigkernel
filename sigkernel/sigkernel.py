@@ -178,11 +178,11 @@ class SigKernel():
         
         assert not Y.requires_grad, "the second input should not require grad"
 
-        k_XX = self.compute_kernel(X, X, max_batch)
-        k_YY = self.compute_kernel(Y, Y, max_batch)
-        k_XY = self.compute_kernel(X, Y, max_batch)
+        K_XX = self.compute_kernel(X, X, max_batch)
+        K_YY = self.compute_kernel(Y, Y, max_batch)
+        K_XY = self.compute_kernel(X, Y, max_batch)
 
-        return torch.mean(k_XX) + torch.mean(k_YY) - 2.*torch.mean(k_XY)
+        return torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY)
 
     def compute_scoring_rule(self, X, y, max_batch=100):
         """Input:
@@ -194,8 +194,8 @@ class SigKernel():
 
         assert not y.requires_grad, "the second input should not require grad"
 
-        k_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
-        k_Xy = self.compute_Gram(X, y, sym=False, max_batch=max_batch)
+        K_XX = self.compute_Gram(X, X, sym=True, max_batch=max_batch)
+        K_Xy = self.compute_Gram(X, y, sym=False, max_batch=max_batch)
 
         K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
 
