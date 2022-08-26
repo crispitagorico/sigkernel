@@ -427,7 +427,7 @@ class _SigKernelGram(torch.autograd.Function):
 
         if X.requires_grad:
             grad_points = prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
-        ctx.save_for_backward(X, Y, grad_points)      
+            ctx.save_for_backward(X, Y, grad_points)      
 
         return G[:,:,-1,-1]
 
