@@ -426,13 +426,31 @@ class _SigKernelGram(torch.autograd.Function):
             G = torch.tensor(sig_kernel_Gram_varpar(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         if X.requires_grad:
-            grad_points = self.prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
+            grad_points = prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
         ctx.save_for_backward(X, Y, grad_points)      
 
         return G[:,:,-1,-1]
 
+    
+
     @staticmethod
-    def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver):
+    def backward(ctx, grad_output):
+
+        grad_points = ctx.grad_points
+        X, Y = ctx.X, ctx.Y
+
+        if Y.requires_grad:
+            if torch.equal(X, Y):
+                grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+                return grad, None, None, None, None, None
+            else:
+                raise NotImplementedError('Should implement the gradients for the case where the gram matrix is non symmetric and both sets of inputs are diffentiable')
+        else:
+            grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
+            return grad, None, None, None, None, None
+# ===========================================================================================================
+
+def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver):
 
         G_static_ = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:] 
         G_static_ = tile(tile(G_static_,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
@@ -511,24 +529,6 @@ class _SigKernelGram(torch.autograd.Function):
         grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)   # shape (A,B,M,D) 
 
         return grad_points
-
-    @staticmethod
-    def backward(ctx, grad_output):
-
-        grad_points = ctx.grad_points
-        X, Y = ctx.X, ctx.Y
-
-        if Y.requires_grad:
-            if torch.equal(X, Y):
-                grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
-                return grad, None, None, None, None, None
-            else:
-                raise NotImplementedError('Should implement the gradients for the case where the gram matrix is non symmetric and both sets of inputs are diffentiable')
-        else:
-            grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
-            return grad, None, None, None, None, None
-# ===========================================================================================================
-
 
 
 def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
