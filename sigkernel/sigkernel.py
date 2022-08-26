@@ -436,8 +436,7 @@ class _SigKernelGram(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
 
-        grad_points = ctx.grad_points
-        X, Y = ctx.X, ctx.Y
+        X, Y, grad_points = ctx.saved_tensors
 
         if Y.requires_grad:
             if torch.equal(X, Y):
