@@ -425,23 +425,14 @@ class _SigKernelGram(torch.autograd.Function):
         else:
             G = torch.tensor(sig_kernel_Gram_varpar(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
-        ctx.save_for_backward(X,Y,G,G_static)      
-        ctx.sym = sym
-        ctx.static_kernel = static_kernel
-        ctx.dyadic_order = dyadic_order
-        ctx._naive_solver = _naive_solver
+        if X.requires_grad:
+            grad_points = self.prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
+        ctx.save_for_backward(X, Y, grad_points)      
 
         return G[:,:,-1,-1]
 
-
     @staticmethod
-    def backward(ctx, grad_output):
-
-        X, Y, G, G_static = ctx.saved_tensors
-        sym = ctx.sym
-        static_kernel = ctx.static_kernel
-        dyadic_order = ctx.dyadic_order
-        _naive_solver = ctx._naive_solver
+    def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver):
 
         G_static_ = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:] 
         G_static_ = tile(tile(G_static_,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
@@ -518,6 +509,14 @@ class _SigKernelGram(torch.autograd.Function):
         grad_next = torch.cat([torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device), grad_1[:,:,1:,:]], dim=2)   # /
         grad_incr = grad_prev - grad_1[:,:,1:,:]
         grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)   # shape (A,B,M,D) 
+
+        return grad_points
+
+    @staticmethod
+    def backward(ctx, grad_output):
+
+        grad_points = ctx.grad_points
+        X, Y = ctx.X, ctx.Y
 
         if Y.requires_grad:
             if torch.equal(X, Y):
