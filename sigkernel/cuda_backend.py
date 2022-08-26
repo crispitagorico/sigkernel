@@ -52,7 +52,7 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_derivative_batch_varpar_from_increments_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diagonals, M_sol, M_sol_diff):
+def compute_sig_kernel_derivative_batch_from_increments_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diagonals, M_sol, M_sol_diff):
     """
     We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
     M_inc: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
@@ -92,7 +92,8 @@ def compute_sig_kernel_derivative_batch_varpar_from_increments_cuda(M_inc, M_inc
             k_10_diff = M_sol_diff[block_id, i, j-1]
             k_00_diff = M_sol_diff[block_id, i-1, j-1]
 
-            M_sol[block_id, i, j] = (k_01 + k_10) * (1. + 0.5*inc) - k_00
+            # M_sol[block_id, i, j] = (k_01 + k_10) * (1. + 0.5*inc) - k_00 # naive solver
+            M_sol[block_id, i, j] = (k_01 + k_10) * (1. + 0.5 * inc + (1. / 12) * inc ** 2) - k_00 * (1. - (1. / 12) * inc ** 2) # higher order solver
             M_sol_diff[block_id, i, j] = (k_01_diff + k_10_diff) * (1. + 0.5*inc) - k_00_diff + 0.5*inc_diff*(k_01 + k_10)
 
         # Wait for other threads in this block

@@ -3,8 +3,8 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from cython_backend import sig_kernel_batch_varpar, sig_kernel_derivative_batch_varpar, sig_kernel_Gram_varpar
-from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_derivative_batch_varpar_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
+from cython_backend import sig_kernel_batch_varpar, sig_kernel_derivative_batch, sig_kernel_Gram_varpar
+from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_derivative_batch_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
 
 
 # ===========================================================================================================
@@ -574,7 +574,7 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
         K_diff[:, :, 0] = 0.
 
         # Compute the signature kernel and its derivative
-        compute_sig_kernel_derivative_batch_varpar_from_increments_cuda[A, threads_per_block](
+        compute_sig_kernel_derivative_batch_from_increments_cuda[A, threads_per_block](
             cuda.as_cuda_array(G_static_.detach()),
             cuda.as_cuda_array(G_static_diff_.detach()),
             MM + 1, NN + 1, n_anti_diagonals,
@@ -585,7 +585,7 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
 
     # if on CPU
     else:
-        K, K_diff = sig_kernel_derivative_batch_varpar(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
+        K, K_diff = sig_kernel_derivative_batch(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
         K = torch.tensor(K, dtype=G_static.dtype, device=G_static.device)
         K_diff = torch.tensor(K_diff, dtype=G_static.dtype, device=G_static.device)
 
