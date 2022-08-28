@@ -3,7 +3,7 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from cython_backend import sig_kernel_batch_varpar, sig_kernel_derivative_batch, sig_kernel_Gram_varpar
+from cython_backend import sig_kernel_batch_varpar, sig_kernel_Gram_varpar #, sig_kernel_derivative_batch
 from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_derivative_batch_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
 
 
