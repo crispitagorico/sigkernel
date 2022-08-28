@@ -138,6 +138,9 @@ class SigKernel():
                   - matrix k(X^i_T,Y^j_T) of shape (batch_X, batch_Y)
         """
 
+        if X.requires_grad == True:
+            return _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
+
         batch_X = X.shape[0]
         batch_Y = Y.shape[0]
         if batch_X <= max_batch and batch_Y <= max_batch:
