@@ -33,6 +33,7 @@ def sig_kernel_batch_varpar(double[:,:,:] G_static, bint _naive_solver=False):
     return np.array(K)
 
 
+
 def sig_kernel_derivative_batch(double[:,:,:] G_static, double[:,:,:] G_static_direction):
 
     cdef int A = G_static.shape[0]
