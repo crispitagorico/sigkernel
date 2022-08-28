@@ -375,7 +375,10 @@ class _SigKernel(torch.autograd.Function):
         grad_points = torch.cat([(grad_2[:,0,:]-grad_1[:,0,:])[:,None,:],grad_incr,grad_1[:,-1,:][:,None,:]],dim=1)
 
         if Y.requires_grad:
-            grad_points*=2
+            if torch.equal(X, Y):
+                grad_points*=2
+            else:
+                raise NotImplementedError('Should implement the gradients for the case where both sets of inputs are diffentiable but are different')
 
         return grad_output[:,None,None]*grad_points, None, None, None, None
 
@@ -487,7 +490,7 @@ class _SigKernelGram(torch.autograd.Function):
             G_rev = torch.tensor(sig_kernel_Gram_varpar(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         G_rev = flip(flip(G_rev,dim=2),dim=3)
-        GG = G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]     
+        GG = G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]  # shape (A,B,MM,NN)   
 
         # finite difference step 
         h = 1e-9
@@ -498,7 +501,7 @@ class _SigKernelGram(torch.autograd.Function):
 
         G_h = static_kernel.Gram_matrix(Xh,Y) 
         G_h = G_h.reshape(A,B,M,D,N)
-        G_h = G_h.permute(0,1,2,4,3) 
+        G_h = G_h.permute(0,1,2,4,3) # shape (A,B,M,N,D)
 
         Diff_1 = G_h[:,:,1:,1:,:] - G_h[:,:,1:,:-1,:] - (G_static[:,:,1:,1:])[:,:,:,:,None] + (G_static[:,:,1:,:-1])[:,:,:,:,None]
         Diff_1 =  tile(tile(Diff_1,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)  
@@ -506,22 +509,25 @@ class _SigKernelGram(torch.autograd.Function):
         Diff_2 += - G_h[:,:,:-1,1:,:] + G_h[:,:,:-1,:-1,:] + (G_static[:,:,:-1,1:])[:,:,:,:,None] - (G_static[:,:,:-1,:-1])[:,:,:,:,None]
         Diff_2 = tile(tile(Diff_2,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)  
 
-        grad_1 = (GG[:,:,:,:,None] * Diff_1)/h
+        grad_1 = (GG[:,:,:,:,None] * Diff_1)/h     # shape (A,B,MM,NN,D) 
         grad_2 = (GG[:,:,:,:,None] * Diff_2)/h
 
-        grad_1 = torch.sum(grad_1,axis=3)
-        grad_1 = torch.sum(grad_1.reshape(A,B,M-1,2**dyadic_order,D),axis=3)
-        grad_2 = torch.sum(grad_2,axis=3)
-        grad_2 = torch.sum(grad_2.reshape(A,B,M-1,2**dyadic_order,D),axis=3)
+        grad_1 = torch.sum(grad_1,axis=3)    # shape (A,B,MM,D) 
+        grad_1 = torch.sum(grad_1.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D) 
+        grad_2 = torch.sum(grad_2,axis=3)    # shape (A,B,MM,D) 
+        grad_2 = torch.sum(grad_2.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D) 
 
         grad_prev = grad_1[:,:,:-1,:] + grad_2[:,:,1:,:]  # /¯¯
         grad_next = torch.cat([torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device), grad_1[:,:,1:,:]], dim=2)   # /
         grad_incr = grad_prev - grad_1[:,:,1:,:]
-        grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)
+        grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)   # shape (A,B,M,D) 
 
-        if sym:
-            grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
-            return grad, None, None, None, None, None
+        if Y.requires_grad:
+            if torch.equal(X, Y):
+                grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+                return grad, None, None, None, None, None
+            else:
+                raise NotImplementedError('Should implement the gradients for the case where the gram matrix is non symmetric and both sets of inputs are diffentiable')
         else:
             grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
             return grad, None, None, None, None, None
