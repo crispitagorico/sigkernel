@@ -440,7 +440,8 @@ class _SigKernelGram(torch.autograd.Function):
 
         if Y.requires_grad:
             # if torch.equal(X, Y):
-            grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+#             grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+            grad = 2*(grad_output[:,:,None,None]*grad_points).sum(dim=1)
             return grad, None, None, None, None, None
             # else:
                 # raise NotImplementedError('Should implement the gradients for the case where the gram matrix is non symmetric and both sets of inputs are diffentiable')
