@@ -1,0 +1,15 @@
+LICENSE
+README.md
+setup.py
+sigkernel/__init__.py
+sigkernel/cuda_backend.py
+sigkernel/cython_backend.c
+sigkernel/sigkernel.py
+sigkernel/static_kernels.py
+sigkernel/transformers.py
+sigkernel.egg-info/PKG-INFO
+sigkernel.egg-info/SOURCES.txt
+sigkernel.egg-info/dependency_links.txt
+sigkernel.egg-info/not-zip-safe
+sigkernel.egg-info/requires.txt
+sigkernel.egg-info/top_level.txt
