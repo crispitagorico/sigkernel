@@ -70,6 +70,10 @@ sr = signature_kernel.compute_scoring_rule(X,y,max_batch)
 
 # ... and expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
 esr = signature_kernel.compute_expected_scoring_rule(X,Y,max_batch)
+
+# Sig CHSIC 
+Z = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
+sigchsic = signature_kernel.SigCHSIC(X, Y, Z, static_kernel, dyadic_order=1, eps=0.1)
 ```
 
 ## Examples for paper [The signature kernel is the solution of a Goursat PDE](https://arxiv.org/abs/2006.14794)
