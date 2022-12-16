@@ -71,7 +71,7 @@ sr = signature_kernel.compute_scoring_rule(X,y,max_batch)
 # ... and expected scoring rule between X and Y, i.e. S(X,Y) = E_Y[S_sig(X,y)]
 esr = signature_kernel.compute_expected_scoring_rule(X,Y,max_batch)
 
-# Sig CHSIC 
+# Sig CHSIC: XY|Z
 Z = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
 sigchsic = signature_kernel.SigCHSIC(X, Y, Z, static_kernel, dyadic_order=1, eps=0.1)
 ```
