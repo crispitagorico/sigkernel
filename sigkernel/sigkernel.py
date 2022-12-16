@@ -138,9 +138,6 @@ class SigKernel():
                   - matrix k(X^i_T,Y^j_T) of shape (batch_X, batch_Y)
         """
 
-        if X.requires_grad == True:
-            return _SigKernelGram.apply(X, Y, self.static_kernel, self.dyadic_order, sym, self._naive_solver)
-
         batch_X = X.shape[0]
         batch_Y = Y.shape[0]
         if batch_X <= max_batch and batch_Y <= max_batch:
@@ -525,10 +522,13 @@ class _SigKernelGram(torch.autograd.Function):
 
         if Y.requires_grad:
             if torch.equal(X, Y):
-                grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+#                 grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
+                grad = 2*(grad_output[:,:,None,None]*grad_points).sum(dim=1)
                 return grad, None, None, None, None, None
             else:
-                raise NotImplementedError('Should implement the gradients for the case where the gram matrix is non symmetric and both sets of inputs are diffentiable')
+                grad = 2*(grad_output[:,:,None,None]*grad_points).sum(dim=1)
+                return grad, None, None, None, None, None
+#                 raise NotImplementedError('Should implement the gradients for the case where the gram matrix is non symmetric and both sets of inputs are diffentiable')
         else:
             grad = (grad_output[:,:,None,None]*grad_points).sum(dim=1)
             return grad, None, None, None, None, None
@@ -809,4 +809,8 @@ class SigMMD_naive(torch.nn.Module):
         K_YY = SigKernelGramMat_naive(Y,Y,self.static_kernel,self.dyadic_order,self._naive_solver)  
         K_XY = SigKernelGramMat_naive(X,Y,self.static_kernel,self.dyadic_order,self._naive_solver)
         
-        return torch.mean(K_XX) + torch.mean(K_YY) - 2.*torch.mean(K_XY) 
+        K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
+        K_YY_m = (torch.sum(K_YY) - torch.sum(torch.diag(K_YY))) / (K_YY.shape[0] * (K_YY.shape[0] - 1.))
+
+        return K_XX_m + K_YY_m - 2. * torch.mean(K_XY)
+
