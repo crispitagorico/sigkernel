@@ -3,7 +3,7 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from cython_backend import sig_kernel_batch_varpar, sig_kernel_Gram_varpar, sig_kernel_derivative_batch
+from cython_backend import sig_kernel_batch_varpar, sig_kernel_derivative_batch, sig_kernel_Gram_varpar
 from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_derivative_batch_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
 
 from .static_kernels import * 
@@ -170,7 +170,6 @@ class SigKernel():
         K_YY_m = (torch.sum(K_YY) - torch.sum(torch.diag(K_YY))) / (K_YY.shape[0] * (K_YY.shape[0] - 1.))
 
         return K_XX_m + K_YY_m - 2. * torch.mean(K_XY)
-
 
 
 class _SigKernel(torch.autograd.Function):
@@ -458,6 +457,7 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
 
         return grad_points
 
+
 def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
     """Input:
               - X: torch tensor of shape (batch, length_X, dim),
@@ -571,54 +571,7 @@ def hypothesis_test(y_pred, y_test, static_kernel, confidence_level=0.99, dyadic
 # ===========================================================================================================
 
 
-def SigCHSIC(X, Y, Z, static_kernel, dyadic_order=1, eps=0.1):
-    """Input:
-            - X: torch tensor of shape (batch, length_X, dim_X),
-            - Y: torch tensor of shape (batch, length_Y, dim_Y)
-            - Z: torch tensor of shape (batch, length_Z, dim_Z)
-            - sigma: kernel bandwidth hyperparameter
-            - eps: normalization parameter
 
-        Output: Signature CHSIC
-    """
-
-    device = X.device
-    dtype = X.dtype
-
-    # number of samples
-    m = X.shape[0]
-
-    # centering matrix
-    H = torch.eye(m, dtype=dtype, device=device) - (1. / m) * torch.ones((m, m), dtype=dtype, device=device)
-
-    # initialise signature kernel
-    signature_kernel = SigKernel(static_kernel, dyadic_order)
-
-    # compute signature Gram matrices
-    K_X = signature_kernel.compute_Gram(X, X, sym=True)
-    K_Y = signature_kernel.compute_Gram(Y, Y, sym=True)
-    K_Z = signature_kernel.compute_Gram(Z, Z, sym=True)
-
-    # center Gram matrices
-    K_X_ = H @ K_X @ H
-    K_Y_ = H @ K_Y @ H
-    K_Z_ = H @ K_Z @ H
-
-    # epsilon perturbation of K_Z_
-    K_Z_e = K_Z_ + m * eps * torch.eye(m, device=device)
-
-    # inverting K_Z_e
-    K_Z_e_inv = torch.cholesky_inverse(K_Z_e)
-    K_Z_e_inv2 = K_Z_e_inv @ K_Z_e_inv
-
-    # computing three terms in CHSIC
-    term_1 = torch.trace(K_X_ @ K_Y_)
-    A = K_Z_ @ K_Z_e_inv2 @ K_Z_
-    B = K_X_ @ A @ K_Y_
-    term_2 = torch.trace(B)
-    term_3 = torch.trace(B @ A)
-
-    return (term_1 - 2. * term_2 + term_3) / m ** 2
 
 
 

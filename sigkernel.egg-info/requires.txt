@@ -1,0 +1,6 @@
+cython>=0.29
+numba>=0.50
+torch>=1.6.0
+scikit-learn
+tslearn
+scipy
