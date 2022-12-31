@@ -504,12 +504,6 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
         K[:, 0, :] = 1.
         K[:, :, 0] = 1.
 
-        K_diff[:, 0, :] = 0.
-        K_diff[:, :, 0] = 0.
-
-        K_diffdiff[:, 0, :] = 0.
-        K_diffdiff[:, :, 0] = 0.
-
         # Compute the signature kernel and its derivative
         compute_sig_kernel_derivative_batch_from_increments_cuda[A, threads_per_block](
             cuda.as_cuda_array(G_static_.detach()),
