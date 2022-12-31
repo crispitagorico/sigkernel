@@ -465,6 +465,7 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
               - gamma: torch tensor of shape (batch, length_X, dim)
        Output:
               - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
+              - vector of shape (batch,) of second directional derivatives k_{gamma gamma}(X^i_T,Y^i_T) wrt 1st variable
     """
 
     A = X.shape[0]
@@ -498,6 +499,7 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
         # Prepare the tensor of output solutions to the PDE
         K = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
         K_diff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K_diffdiff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
 
         K[:, 0, :] = 1.
         K[:, :, 0] = 1.
@@ -505,23 +507,28 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
         K_diff[:, 0, :] = 0.
         K_diff[:, :, 0] = 0.
 
+        K_diffdiff[:, 0, :] = 0.
+        K_diffdiff[:, :, 0] = 0.
+
         # Compute the signature kernel and its derivative
         compute_sig_kernel_derivative_batch_from_increments_cuda[A, threads_per_block](
             cuda.as_cuda_array(G_static_.detach()),
             cuda.as_cuda_array(G_static_diff_.detach()),
             MM + 1, NN + 1, n_anti_diagonals,
-            cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff))
+            cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
 
         K = K[:, :-1, :-1]
         K_diff = K_diff[:, :-1, :-1]
+        K_diffdiff = K_diffdiff[:, :-1, :-1]
 
     # if on CPU
     else:
-        K, K_diff = sig_kernel_derivative_batch(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
+        K, K_diff, K_diffdiff = sig_kernel_derivative_batch(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
         K = torch.tensor(K, dtype=G_static.dtype, device=G_static.device)
         K_diff = torch.tensor(K_diff, dtype=G_static.dtype, device=G_static.device)
+        K_diffdiff = torch.tensor(K_diffdiff, dtype=G_static.dtype, device=G_static.device)
 
-    return K[:, -1, -1], K_diff[:, -1, -1]
+    return K[:, -1, -1], K_diff[:, -1, -1], K_diffdiff[:, -1, -1]
 
 
 # ===========================================================================================================

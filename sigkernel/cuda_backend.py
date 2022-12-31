@@ -52,13 +52,13 @@ def compute_sig_kernel_batch_varpar_from_increments_cuda(M_inc, len_x, len_y, n_
 
 # ===========================================================================================================
 @cuda.jit
-def compute_sig_kernel_derivative_batch_from_increments_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diagonals, M_sol, M_sol_diff):
+def compute_sig_kernel_derivative_batch_from_increments_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diagonals, M_sol, M_sol_diff, M_sol_diffdiff):
     """
     We start from a list of pairs of paths [(x^1,y^1), ..., (x^n, y^n)]
     M_inc: a 3-tensor D[i,j,k] = <x^i_j, y^i_k>.
     M_inc_diff: a 3-tensor D[i,j,k] = <gamma^i_j, y^i_k>.
     n_anti_diagonals = 2 * max(len_x, len_y) - 1
-    M_sol, M_sol_diff: two 3-tensor storing the solutions of the PDEs for the kernel and its derivative resp.
+    M_sol, M_sol_diff, M_sol_diffdiff: two 3-tensor storing the solutions of the PDEs for the kernel and its first and second derivative resp.
     """
 
     # Each block corresponds to a pair (x_i,y_i).
@@ -92,9 +92,13 @@ def compute_sig_kernel_derivative_batch_from_increments_cuda(M_inc, M_inc_diff, 
             k_10_diff = M_sol_diff[block_id, i, j-1]
             k_00_diff = M_sol_diff[block_id, i-1, j-1]
 
-            # M_sol[block_id, i, j] = (k_01 + k_10) * (1. + 0.5*inc) - k_00 # naive solver
-            M_sol[block_id, i, j] = (k_01 + k_10) * (1. + 0.5 * inc + (1. / 12) * inc ** 2) - k_00 * (1. - (1. / 12) * inc ** 2) # higher order solver
-            M_sol_diff[block_id, i, j] = (k_01_diff + k_10_diff) * (1. + 0.5*inc) - k_00_diff + 0.5*inc_diff*(k_01 + k_10)
+            k_01_diffdiff = M_sol_diffdiff[block_id, i - 1, j]
+            k_10_diffdiff = M_sol_diffdiff[block_id, i, j - 1]
+            k_00_diffdiff = M_sol_diffdiff[block_id, i - 1, j - 1]
+
+            M_sol[block_id, i, j] = (k_01 + k_10) * (1. + .5*inc) - k_00
+            M_sol_diff[block_id, i, j] = (k_01_diff + k_10_diff) * (1. + .5*inc) - k_00_diff + .5*inc_diff*(k_01 + k_10)
+            M_sol_diffdiff[block_id, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5*inc) - k_00_diffdiff + .5*inc_diff*(k_01_diff + k_10_diff)
 
         # Wait for other threads in this block
         cuda.syncthreads()

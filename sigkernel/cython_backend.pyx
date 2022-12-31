@@ -40,26 +40,25 @@ def sig_kernel_derivative_batch(double[:,:,:] G_static, double[:,:,:] G_static_d
     cdef int N = G_static.shape[2]
     cdef int i, j, l
 
-    cdef double[:,:,:] K_diff = np.zeros((A,M+1,N+1), dtype=np.float64)
     cdef double[:,:,:] K = np.zeros((A,M+1,N+1), dtype=np.float64)
+    cdef double[:,:,:] K_diff = np.zeros((A,M+1,N+1), dtype=np.float64)
+    cdef double[:,:,:] K_diffdiff = np.zeros((A,M+1,N+1), dtype=np.float64)
 
     for l in range(A):
 
         for i in range(M+1):
             K[l,i,0] = 1.
-            K_diff[l,i,0] = 0.
 
         for j in range(N+1):
             K[l,0,j] = 1.
-            K_diff[l,0,j] = 0.
 
         for i in range(M):
             for j in range(N):
-                #K[l,i+1,j+1] = (K[l,i+1,j] + K[l,i,j+1])*(1. + 0.5*G_static[l,i,j]) - K[l,i,j]
-                K[l,i+1,j+1] = (K[l,i,j+1] + K[l,i+1,j]) * (1. + 0.5 * G_static[l,i,j] + (1. / 12) * G_static[l,i,j] ** 2) - K[l,i,j] * (1. - (1. / 12) * G_static[l,i,j] ** 2)
-                K_diff[l,i+1,j+1] = (K_diff[l,i+1,j] + K_diff[l,i,j+1])*(1. + 0.5*G_static[l,i,j]) - K_diff[l,i,j] + (K[l,i+1,j] + K[l,i,j+1])*0.5*G_static[l,i,j]
+                K[l,i+1,j+1] = (K[l,i+1,j] + K[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K[l,i,j]
+                K_diff[l,i+1,j+1] = (K_diff[l,i+1,j] + K_diff[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K_diff[l,i,j] + (K[l,i+1,j] + K[l,i,j+1])*.5*G_static_direction[l,i,j]
+                K_diffdiff[l,i+1,j+1] = (K_diffdiff[l,i+1,j] + K_diffdiff[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K_diffdiff[l,i,j] + (K_diff[l,i+1,j] + K_diff[l,i,j+1])*.5*G_static_direction[l,i,j]
 
-    return np.array(K), np.array(K_diff)
+    return np.array(K), np.array(K_diff), np.array(K_diffdiff)
 
 
 def sig_kernel_Gram_varpar(double[:,:,:,:] G_static, bint sym=False, bint _naive_solver=False):
