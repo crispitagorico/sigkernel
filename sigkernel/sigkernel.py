@@ -51,17 +51,18 @@ class SigKernel():
 
         batch = X.shape[0]
         if batch <= max_batch:
-            K, K_grad = k_kgrad(X, Y, gamma, self.dyadic_order, self.static_kernel)
+            K, K_diff, K_diffdiff = k_kgrad(X, Y, gamma, self.dyadic_order, self.static_kernel)
         else:
             cutoff = int(batch/2)
             X1, X2 = X[:cutoff], X[cutoff:]
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
             g1, g2 = gamma[:cutoff], gamma[cutoff:]
-            K1, K_grad1 = self.compute_kernel_and_derivative(X1, Y1, g1, max_batch)
-            K2, K_grad2 = self.compute_kernel_and_derivative(X2, Y2, g2, max_batch)
+            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivative(X1, Y1, g1, max_batch)
+            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivative(X2, Y2, g2, max_batch)
             K = torch.cat((K1, K2), 0)
-            K_grad = torch.cat((K_grad1, K_grad2), 0)
-        return K, K_grad
+            K_diff = torch.cat((K_diff1, K_diff2), 0)
+            K_diffdiff = torch.cat((K_diffdiff1, K_diffdiff2), 0)
+        return K, K_diff, K_diffdiff
 
 
     def compute_Gram(self, X, Y, sym=False, max_batch=100):
