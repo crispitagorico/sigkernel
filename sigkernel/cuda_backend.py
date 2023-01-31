@@ -98,7 +98,7 @@ def compute_sig_kernel_derivative_batch_from_increments_cuda(M_inc, M_inc_diff, 
 
             M_sol[block_id, i, j] = (k_01 + k_10) * (1. + .5*inc) - k_00
             M_sol_diff[block_id, i, j] = (k_01_diff + k_10_diff) * (1. + .5*inc) - k_00_diff + .5*inc_diff*(k_01 + k_10)
-            M_sol_diffdiff[block_id, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5*inc) - k_00_diffdiff + .5*inc_diff*(k_01_diff + k_10_diff)
+            M_sol_diffdiff[block_id, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5*inc) - k_00_diffdiff + .5*inc_diff*(k_01_diff + k_10_diff + k_01 + k_10)
 
         # Wait for other threads in this block
         cuda.syncthreads()

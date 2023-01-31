@@ -56,7 +56,7 @@ def sig_kernel_derivative_batch(double[:,:,:] G_static, double[:,:,:] G_static_d
             for j in range(N):
                 K[l,i+1,j+1] = (K[l,i+1,j] + K[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K[l,i,j]
                 K_diff[l,i+1,j+1] = (K_diff[l,i+1,j] + K_diff[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K_diff[l,i,j] + (K[l,i+1,j] + K[l,i,j+1])*.5*G_static_direction[l,i,j]
-                K_diffdiff[l,i+1,j+1] = (K_diffdiff[l,i+1,j] + K_diffdiff[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K_diffdiff[l,i,j] + (K_diff[l,i+1,j] + K_diff[l,i,j+1])*.5*G_static_direction[l,i,j]
+                K_diffdiff[l,i+1,j+1] = (K_diffdiff[l,i+1,j] + K_diffdiff[l,i,j+1])*(1. + .5*G_static[l,i,j]) - K_diffdiff[l,i,j] + (K_diff[l,i+1,j] + K_diff[l,i,j+1] + K[l,i+1,j] + K[l,i,j+1])*.5*G_static_direction[l,i,j]
 
     return np.array(K), np.array(K_diff), np.array(K_diffdiff)
 

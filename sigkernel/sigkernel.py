@@ -39,7 +39,7 @@ class SigKernel():
         return K
 
 
-    def compute_kernel_and_derivative(self, X, Y, gamma, max_batch=100):
+    def compute_kernel_and_derivatives(self, X, Y, gamma, max_batch=100):
         """Input:
                   - X: torch tensor of shape (batch, length_X, dim),
                   - Y: torch tensor of shape (batch, length_Y, dim),
@@ -47,6 +47,7 @@ class SigKernel():
            Output:
                   - vector of shape (batch,) of kernel evaluations k_gamma(X^i_T,Y^i_T)
                   - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
+                  - vector of shape (batch,) of second directional derivatives k_gammagamma(X^i_T,Y^i_T) wrt 1st variable
         """
 
         batch = X.shape[0]
@@ -57,8 +58,8 @@ class SigKernel():
             X1, X2 = X[:cutoff], X[cutoff:]
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
             g1, g2 = gamma[:cutoff], gamma[cutoff:]
-            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivative(X1, Y1, g1, max_batch)
-            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivative(X2, Y2, g2, max_batch)
+            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivatives(X1, Y1, g1, max_batch)
+            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivatives(X2, Y2, g2, max_batch)
             K = torch.cat((K1, K2), 0)
             K_diff = torch.cat((K_diff1, K_diff2), 0)
             K_diffdiff = torch.cat((K_diffdiff1, K_diffdiff2), 0)
@@ -465,6 +466,7 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
               - Y: torch tensor of shape (batch, length_Y, dim),
               - gamma: torch tensor of shape (batch, length_X, dim)
        Output:
+              - vector of shape (batch,) of signature kernel k(X^i_T,Y^i_T)
               - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
               - vector of shape (batch,) of second directional derivatives k_{gamma gamma}(X^i_T,Y^i_T) wrt 1st variable
     """
