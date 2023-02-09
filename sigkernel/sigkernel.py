@@ -3,8 +3,8 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from cython_backend import sig_kernel_batch_varpar, sig_kernel_Gram_varpar, sig_kernel_derivative_batch
-from .cuda_backend import compute_sig_kernel_batch_varpar_from_increments_cuda, compute_sig_kernel_derivative_batch_from_increments_cuda, compute_sig_kernel_Gram_mat_varpar_from_increments_cuda
+from cython_backend import sigkernel_cython, sigkernel_derivatives_cython, sigkernel_Gram_cython, sigkernel_derivatives_Gram_cython
+from .cuda_backend import sigkernel_cuda, sigkernel_derivatives_cuda, sigkernel_Gram_cuda, sigkernel_derivatives_Gram_cuda
 
 from .static_kernels import * 
 
@@ -209,14 +209,14 @@ class _SigKernel(torch.autograd.Function):
             K[:,:,0] = 1. 
 
             # Compute the forward signature kernel
-            compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
-                                                                                       MM+1, NN+1, n_anti_diagonals,
-                                                                                       cuda.as_cuda_array(K), _naive_solver)
+            sigkernel_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
+                                                 MM+1, NN+1, n_anti_diagonals,
+                                                 cuda.as_cuda_array(K), _naive_solver)
             K = K[:,:-1,:-1]
 
         # if on CPU
         else:
-            K = torch.tensor(sig_kernel_batch_varpar(G_static_.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
+            K = torch.tensor(sigkernel_cython(G_static_.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         ctx.save_for_backward(X,Y,G_static,K)
         ctx.static_kernel = static_kernel
@@ -265,15 +265,15 @@ class _SigKernel(torch.autograd.Function):
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Compute signature kernel for reversed paths
-            compute_sig_kernel_batch_varpar_from_increments_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()), 
-                                                                                       MM+1, NN+1, n_anti_diagonals,
-                                                                                       cuda.as_cuda_array(K_rev), _naive_solver)
+            sigkernel_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()),
+                                                 MM+1, NN+1, n_anti_diagonals,
+                                                 cuda.as_cuda_array(K_rev), _naive_solver)
 
             K_rev = K_rev[:,:-1,:-1]      
 
         # if on CPU
         else:
-            K_rev = torch.tensor(sig_kernel_batch_varpar(G_static_rev.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
+            K_rev = torch.tensor(sigkernel_cython(G_static_rev.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         K_rev = flip(flip(K_rev,dim=1),dim=2)
         KK = K[:,:-1,:-1] * K_rev[:,1:,1:]   
@@ -347,14 +347,14 @@ class _SigKernelGram(torch.autograd.Function):
 
             # Run the CUDA kernel.
             blockspergrid = (A,B)
-            compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
-                                                                                                      MM+1, NN+1, n_anti_diagonals,
-                                                                                                      cuda.as_cuda_array(G), _naive_solver)
+            sigkernel_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
+                                                                  MM+1, NN+1, n_anti_diagonals,
+                                                                  cuda.as_cuda_array(G), _naive_solver)
 
             G = G[:,:,:-1,:-1]
 
         else:
-            G = torch.tensor(sig_kernel_Gram_varpar(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
+            G = torch.tensor(sigkernel_Gram_cython(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         if X.requires_grad:
             grad_points = prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
@@ -415,15 +415,15 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
 
             # Compute signature kernel for reversed paths
             blockspergrid = (A,B)
-            compute_sig_kernel_Gram_mat_varpar_from_increments_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()), 
-                                                                                                      MM+1, NN+1, n_anti_diagonals,
-                                                                                                      cuda.as_cuda_array(G_rev), _naive_solver)
+            sigkernel_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()),
+                                                                  MM+1, NN+1, n_anti_diagonals,
+                                                                  cuda.as_cuda_array(G_rev), _naive_solver)
 
             G_rev = G_rev[:,:,:-1,:-1]
 
         # if on CPU
         else:
-            G_rev = torch.tensor(sig_kernel_Gram_varpar(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
+            G_rev = torch.tensor(sigkernel_Gram_cython(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         G_rev = flip(flip(G_rev,dim=2),dim=3)
         GG = G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]  # shape (A,B,MM,NN)   
@@ -462,16 +462,17 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
 
 def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
     """Input:
-              - X: torch tensor of shape (batch, length_X, dim),
-              - Y: torch tensor of shape (batch, length_Y, dim),
-              - gamma: torch tensor of shape (batch, length_X, dim)
+              - X: torch tensor of shape (batch_x, length_X, dim),
+              - Y: torch tensor of shape (batch_y, length_Y, dim),
+              - gamma: torch tensor of shape (batch_x, length_X, dim)
        Output:
-              - vector of shape (batch,) of signature kernel k(X^i_T,Y^i_T)
-              - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
-              - vector of shape (batch,) of second directional derivatives k_{gamma gamma}(X^i_T,Y^i_T) wrt 1st variable
+              - vector of shape (batch_x,batch_y) of signature kernel k(X^i_T,Y^j_T)
+              - vector of shape (batch_x,batch_y) of directional derivatives k_gamma^i(X^i_T,Y^j_T)
+              - vector of shape (batch_x,batch_y) of second directional derivatives k_{gamma^i gamma^i}(X^i_T,Y^j_T)
     """
 
     A = X.shape[0]
+    B = Y.shape[0]
     M = X.shape[1]
     N = Y.shape[1]
     D = X.shape[2]
@@ -482,13 +483,11 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
     G_static = static_kernel.batch_kernel(X, Y)
     G_static_diff = static_kernel.batch_kernel(gamma, Y)
 
-    G_static_ = G_static[:, 1:, 1:] + G_static[:, :-1, :-1] - G_static[:, 1:, :-1] - G_static[:, :-1, 1:]
-    G_static_diff_ = G_static_diff[:, 1:, 1:] + G_static_diff[:, :-1, :-1] - G_static_diff[:, 1:,:-1] - G_static_diff[:, :-1, 1:]
+    G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, -1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, -1, 1:]
+    G_static_diff_ = G_static_diff[:, :, 1:, 1:] + G_static_diff[:, :, -1, :-1] - G_static_diff[:, :, 1:,:-1] - G_static_diff[:, :, -1, 1:]
 
-    G_static_ = tile(tile(G_static_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2,
-                     2 ** dyadic_order) / float(2 ** dyadic_order)
-    G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2,
-                          2 ** dyadic_order) / float(2 ** dyadic_order)
+    G_static_ = tile(tile(G_static_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2, 2 ** dyadic_order) / float(2 ** dyadic_order)
+    G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2, 2 ** dyadic_order) / float(2 ** dyadic_order)
 
     # if on GPU
     if X.device.type in ['cuda']:
@@ -500,32 +499,33 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
         n_anti_diagonals = 2 * threads_per_block - 1
 
         # Prepare the tensor of output solutions to the PDE
-        K = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
-        K_diff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
-        K_diffdiff = torch.zeros((A, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K_diff = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K_diffdiff = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
 
-        K[:, 0, :] = 1.
-        K[:, :, 0] = 1.
+        K[:, :, 0, :] = 1.
+        K[:, :, :, 0] = 1.
 
         # Compute the signature kernel and its derivative
-        compute_sig_kernel_derivative_batch_from_increments_cuda[A, threads_per_block](
-            cuda.as_cuda_array(G_static_.detach()),
-            cuda.as_cuda_array(G_static_diff_.detach()),
-            MM + 1, NN + 1, n_anti_diagonals,
-            cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
+        blockspergrid = (A, B)
+        sigkernel_derivatives_Gram_cuda[blockspergrid, threads_per_block](
+                                                              cuda.as_cuda_array(G_static_.detach()),
+                                                              cuda.as_cuda_array(G_static_diff_.detach()),
+                                                              MM + 1, NN + 1, n_anti_diagonals,
+                                                              cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
 
-        K = K[:, :-1, :-1]
-        K_diff = K_diff[:, :-1, :-1]
-        K_diffdiff = K_diffdiff[:, :-1, :-1]
+        K = K[:, :, :-1, :-1]
+        K_diff = K_diff[:, :, -1, :-1]
+        K_diffdiff = K_diffdiff[:, :, -1, :-1]
 
     # if on CPU
     else:
-        K, K_diff, K_diffdiff = sig_kernel_derivative_batch(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
+        K, K_diff, K_diffdiff = sigkernel_derivatives_Gram_cython(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
         K = torch.tensor(K, dtype=G_static.dtype, device=G_static.device)
         K_diff = torch.tensor(K_diff, dtype=G_static.dtype, device=G_static.device)
         K_diffdiff = torch.tensor(K_diffdiff, dtype=G_static.dtype, device=G_static.device)
 
-    return K[:, -1, -1], K_diff[:, -1, -1], K_diffdiff[:, -1, -1]
+    return K[:, :, -1, -1], K_diff[:, :, -1, -1], K_diffdiff[:, :, -1, -1]
 
 
 # ===========================================================================================================
