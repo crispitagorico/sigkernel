@@ -3,8 +3,8 @@ import torch
 import torch.cuda
 from numba import cuda
 
-from cython_backend import sigkernel_cython, sigkernel_derivatives_cython, sigkernel_Gram_cython, sigkernel_derivatives_Gram_cython
-from .cuda_backend import sigkernel_cuda, sigkernel_derivatives_cuda, sigkernel_Gram_cuda, sigkernel_derivatives_Gram_cuda
+from cython_backend import sigkernel_cython, sigkernel_Gram_cython, sigkernel_derivatives_Gram_cython
+from .cuda_backend import sigkernel_cuda, sigkernel_Gram_cuda, sigkernel_derivatives_Gram_cuda
 
 from .static_kernels import * 
 
