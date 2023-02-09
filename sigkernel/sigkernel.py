@@ -503,8 +503,8 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
     G_static = static_kernel.Gram_matrix(X, Y)
     G_static_diff = static_kernel.Gram_matrix(gamma, Y)
 
-    G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, -1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, -1, 1:]
-    G_static_diff_ = G_static_diff[:, :, 1:, 1:] + G_static_diff[:, :, -1, :-1] - G_static_diff[:, :, 1:, :-1] - G_static_diff[:, :, -1, 1:]
+    G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, :-1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, :-1, 1:]
+    G_static_diff_ = G_static_diff[:, :, 1:, 1:] + G_static_diff[:, :, :-1, :-1] - G_static_diff[:, :, 1:, :-1] - G_static_diff[:, :, :-1, 1:]
 
     G_static_ = tile(tile(G_static_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
     G_static_diff_ = tile(tile(G_static_diff_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
