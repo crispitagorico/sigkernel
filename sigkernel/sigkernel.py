@@ -39,15 +39,15 @@ class SigKernel():
         return K
 
 
-    def compute_kernel_and_derivatives(self, X, Y, gamma, max_batch=100):
+    def compute_kernel_and_derivatives_Gram(self, X, Y, gamma, max_batch=100):
         """Input:
-                  - X: torch tensor of shape (batch, length_X, dim),
-                  - Y: torch tensor of shape (batch, length_Y, dim),
-                  - gamma: torch tensor of shape (batch, length_X, dim)
+                  - X: torch tensor of shape (batch_x, length_X, dim),
+                  - Y: torch tensor of shape (batch_y, length_Y, dim),
+                  - gamma: torch tensor of shape (batch_x, length_X, dim)
            Output:
-                  - vector of shape (batch,) of kernel evaluations k_gamma(X^i_T,Y^i_T)
-                  - vector of shape (batch,) of directional derivatives k_gamma(X^i_T,Y^i_T) wrt 1st variable
-                  - vector of shape (batch,) of second directional derivatives k_gammagamma(X^i_T,Y^i_T) wrt 1st variable
+                  - vector of shape (batch_x,batch_y) of kernel evaluations k(X^i_T,Y^j_T)
+                  - vector of shape (batch,batch_y) of directional derivatives k_gamma^i(X^i_T,Y^j_T)
+                  - vector of shape (batch,batch_y) of second directional derivatives k_gamma^igamma^i(X^i_T,Y^j_T)
         """
 
         batch = X.shape[0]
