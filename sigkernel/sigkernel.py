@@ -382,7 +382,7 @@ class _SigKernelGram(torch.autograd.Function):
             grad_points = prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
             ctx.save_for_backward(X, Y, grad_points)
 
-        return G[:,:,-1,-1]
+        return G[:, :, -1, -1]
 
 
 
@@ -451,15 +451,15 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
         # finite difference step
         h = 1e-9
 
-        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]
-        Xh = Xh.permute(0,1,3,2)
-        Xh = Xh.reshape(A,M*D,D)
+        Xh = X[:, :, :, None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]
+        Xh = Xh.permute(0, 1, 3, 2)
+        Xh = Xh.reshape(A, M*D, D)
 
-        G_h = static_kernel.Gram_matrix(Xh,Y)
-        G_h = G_h.reshape(A,B,M,D,N)
-        G_h = G_h.permute(0,1,2,4,3) # shape (A,B,M,N,D)
+        G_h = static_kernel.Gram_matrix(Xh, Y)
+        G_h = G_h.reshape(A, B, M, D, N)
+        G_h = G_h.permute(0, 1, 2, 4, 3) # shape (A,B,M,N,D)
 
-        Diff_1 = G_h[:,:,1:,1:,:] - G_h[:,:,1:,:-1,:] - (G_static[:,:,1:,1:])[:,:,:,:,None] + (G_static[:,:,1:,:-1])[:,:,:,:,None]
+        Diff_1 = G_h[:, :, 1:, 1:, :] - G_h[:, :, 1:, :-1, :] - (G_static[:,:,1:,1:])[:,:,:,:,None] + (G_static[:,:,1:,:-1])[:,:,:,:,None]
         Diff_1 =  tile(tile(Diff_1,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
         Diff_2 = G_h[:,:,1:,1:,:] - G_h[:,:,1:,:-1,:] - (G_static[:,:,1:,1:])[:,:,:,:,None] + (G_static[:,:,1:,:-1])[:,:,:,:,None]
         Diff_2 += - G_h[:,:,:-1,1:,:] + G_h[:,:,:-1,:-1,:] + (G_static[:,:,:-1,1:])[:,:,:,:,None] - (G_static[:,:,:-1,:-1])[:,:,:,:,None]
@@ -468,9 +468,9 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
         grad_1 = (GG[:,:,:,:,None] * Diff_1)/h     # shape (A,B,MM,NN,D)
         grad_2 = (GG[:,:,:,:,None] * Diff_2)/h
 
-        grad_1 = torch.sum(grad_1,axis=3)    # shape (A,B,MM,D)
-        grad_1 = torch.sum(grad_1.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D)
-        grad_2 = torch.sum(grad_2,axis=3)    # shape (A,B,MM,D)
+        grad_1 = torch.sum(grad_1, axis=3)    # shape (A,B,MM,D)
+        grad_1 = torch.sum(grad_1.reshape(A, B, M-1, 2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D)
+        grad_2 = torch.sum(grad_2, axis=3)    # shape (A,B,MM,D)
         grad_2 = torch.sum(grad_2.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D)
 
         grad_prev = grad_1[:,:,:-1,:] + grad_2[:,:,1:,:]  # /¯¯
@@ -534,8 +534,8 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
                                                                           cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
 
         K = K[:, :, :-1, :-1]
-        K_diff = K_diff[:, :, -1, :-1]
-        K_diffdiff = K_diffdiff[:, :, -1, :-1]
+        K_diff = K_diff[:, :, :-1, :-1]
+        K_diffdiff = K_diffdiff[:, :, :-1, :-1]
 
     # if on CPU
     else:
