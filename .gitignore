@@ -270,3 +270,4 @@ __pycache__/
 /utils/sqrtm.py
 /results/trained_models.pkl
 /.idea
+/sigkernel.egg-info/
