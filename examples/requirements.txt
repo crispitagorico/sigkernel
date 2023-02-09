@@ -1,6 +1,0 @@
-iisignature
-tslearn
-scikit-learn
-tqdm
-fbm
-scipy
