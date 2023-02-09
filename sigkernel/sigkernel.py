@@ -57,8 +57,8 @@ class SigKernel():
         elif batch_X <= max_batch and batch_Y > max_batch:
             cutoff = int(batch_Y/2)
             Y1, Y2 = Y[:cutoff], Y[cutoff:]
-            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivatives(X, Y1, gamma, max_batch)
-            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivatives(X, Y2, gamma, max_batch)
+            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivatives_Gram(X, Y1, gamma, max_batch)
+            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivatives_Gram(X, Y2, gamma, max_batch)
             K = torch.cat((K1, K2), 1)
             K_diff = torch.cat((K_diff1, K_diff2), 1)
             K_diffdiff = torch.cat((K_diffdiff1, K_diffdiff2), 1)
@@ -66,8 +66,8 @@ class SigKernel():
             cutoff = int(batch_X/2)
             X1, X2 = X[:cutoff], X[cutoff:]
             gamma1, gamma2 = gamma[:cutoff], gamma[cutoff:]
-            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivatives(X1, Y, gamma1, max_batch)
-            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivatives(X2, Y, gamma2, max_batch)
+            K1, K_diff1, K_diffdiff1 = self.compute_kernel_and_derivatives_Gram(X1, Y, gamma1, max_batch)
+            K2, K_diff2, K_diffdiff2 = self.compute_kernel_and_derivatives_Gram(X2, Y, gamma2, max_batch)
             K = torch.cat((K1, K2), 0)
             K_diff = torch.cat((K_diff1, K_diff2), 0)
             K_diffdiff = torch.cat((K_diffdiff1, K_diffdiff2), 0)
@@ -77,10 +77,10 @@ class SigKernel():
             X1, X2 = X[:cutoff_X], X[cutoff_X:]
             Y1, Y2 = Y[:cutoff_Y], Y[cutoff_Y:]
             gamma1, gamma2 = gamma[:cutoff_X], gamma[cutoff_X:]
-            K11, K_diff11, K_diffdiff11 = self.compute_kernel_and_derivatives(X1, Y1, gamma1, max_batch)
-            K12, K_diff12, K_diffdiff12 = self.compute_kernel_and_derivatives(X1, Y2, gamma1, max_batch)
-            K21, K_diff21, K_diffdiff21 = self.compute_kernel_and_derivatives(X2, Y1, gamma2, max_batch)
-            K22, K_diff22, K_diffdiff22 = self.compute_kernel_and_derivatives(X2, Y2, gamma2, max_batch)
+            K11, K_diff11, K_diffdiff11 = self.compute_kernel_and_derivatives_Gram(X1, Y1, gamma1, max_batch)
+            K12, K_diff12, K_diffdiff12 = self.compute_kernel_and_derivatives_Gram(X1, Y2, gamma1, max_batch)
+            K21, K_diff21, K_diffdiff21 = self.compute_kernel_and_derivatives_Gram(X2, Y1, gamma2, max_batch)
+            K22, K_diff22, K_diffdiff22 = self.compute_kernel_and_derivatives_Gram(X2, Y2, gamma2, max_batch)
 
             K_top, K_diff_top, K_diffdiff_top = torch.cat((K11, K12), 1), torch.cat((K_diff11, K_diff12), 1), torch.cat((K_diffdiff11, K_diffdiff12), 1)
             K_bottom, K_diff_bottom, K_diffdiff_bottom = torch.cat((K21, K22), 1), torch.cat((K_diff21, K_diff22), 1), torch.cat((K_diffdiff21, K_diffdiff22), 1)
