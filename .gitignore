@@ -275,3 +275,4 @@ __pycache__/
 /results/trained_models.pkl
 /.idea
 /build
+/venv
