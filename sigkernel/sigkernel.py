@@ -6,7 +6,7 @@ from numba import cuda
 from cython_backend import sigkernel_cython, sigkernel_Gram_cython, sigkernel_derivatives_Gram_cython
 from .cuda_backend import sigkernel_cuda, sigkernel_Gram_cuda, sigkernel_derivatives_Gram_cuda
 
-from .static_kernels import * 
+from .static_kernels import *
 
 # ===========================================================================================================
 # Signature Kernel
@@ -20,7 +20,7 @@ class SigKernel():
         self._naive_solver = _naive_solver
 
     def compute_kernel(self, X, Y, max_batch=100):
-        """Input: 
+        """Input:
                   - X: torch tensor of shape (batch, length_X, dim),
                   - Y: torch tensor of shape (batch, length_Y, dim)
            Output: 
@@ -89,7 +89,7 @@ class SigKernel():
 
 
     def compute_Gram(self, X, Y, sym=False, max_batch=100):
-        """Input: 
+        """Input:
                   - X: torch tensor of shape (batch_X, length_X, dim),
                   - Y: torch tensor of shape (batch_Y, length_Y, dim)
            Output: 
@@ -127,13 +127,13 @@ class SigKernel():
         return K
 
     def compute_distance(self, X, Y, max_batch=100):
-        """Input: 
+        """Input:
                   - X: torch tensor of shape (batch, length_X, dim),
                   - Y: torch tensor of shape (batch, length_Y, dim)
            Output: 
                   - vector ||S(X^i)_T - S(Y^i)_T||^2 of shape (batch,)
         """
-        
+
         assert not Y.requires_grad, "the second input should not require grad"
 
         K_XX = self.compute_kernel(X, X, max_batch)
@@ -177,7 +177,7 @@ class SigKernel():
         return K_XX_m - 2.*torch.mean(K_XY)
 
     def compute_mmd(self, X, Y, max_batch=100):
-        """Input: 
+        """Input:
                   - X: torch tensor of shape (batch_X, length_X, dim),
                   - Y: torch tensor of shape (batch_Y, length_Y, dim)
            Output: 
@@ -199,7 +199,7 @@ class SigKernel():
 
 class _SigKernel(torch.autograd.Function):
     """Signature kernel k_sig(x,y) = <S(f(x)),S(f(y))> where k(x,y) = <f(x),f(y)> is a given static kernel"""
- 
+
     @staticmethod
     def forward(ctx, X, Y, static_kernel, dyadic_order, _naive_solver=False):
 
@@ -213,22 +213,22 @@ class _SigKernel(torch.autograd.Function):
 
         # computing dsdt k(X^i_s,Y^i_t)
         G_static = static_kernel.batch_kernel(X,Y)
-        G_static_ = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:] 
+        G_static_ = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:]
         G_static_ = tile(tile(G_static_,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
         # if on GPU
         if X.device.type in ['cuda']:
 
             assert max(MM+1,NN+1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
-            
+
             # cuda parameters
             threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Prepare the tensor of output solutions to the PDE (forward)
-            K = torch.zeros((A, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype) 
+            K = torch.zeros((A, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
             K[:,0,:] = 1.
-            K[:,:,0] = 1. 
+            K[:,:,0] = 1.
 
             # Compute the forward signature kernel
             sigkernel_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
@@ -250,13 +250,13 @@ class _SigKernel(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-    
+
         X, Y, G_static, K = ctx.saved_tensors
         static_kernel = ctx.static_kernel
         dyadic_order = ctx.dyadic_order
         _naive_solver = ctx._naive_solver
 
-        G_static_ = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:] 
+        G_static_ = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:]
         G_static_ = tile(tile(G_static_,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
         A = X.shape[0]
@@ -266,7 +266,7 @@ class _SigKernel(torch.autograd.Function):
 
         MM = (2**dyadic_order)*(M-1)
         NN = (2**dyadic_order)*(N-1)
-            
+
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
         Y_rev = torch.flip(Y, dims=[1])
@@ -278,9 +278,9 @@ class _SigKernel(torch.autograd.Function):
         if X.device.type in ['cuda']:
 
             # Prepare the tensor of output solutions to the PDE (backward)
-            K_rev = torch.zeros((A, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype) 
+            K_rev = torch.zeros((A, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype)
             K_rev[:,0,:] = 1.
-            K_rev[:,:,0] = 1. 
+            K_rev[:,:,0] = 1.
 
             # cuda parameters
             threads_per_block = max(MM,NN)
@@ -291,31 +291,31 @@ class _SigKernel(torch.autograd.Function):
                                                  MM+1, NN+1, n_anti_diagonals,
                                                  cuda.as_cuda_array(K_rev), _naive_solver)
 
-            K_rev = K_rev[:,:-1,:-1]      
+            K_rev = K_rev[:,:-1,:-1]
 
         # if on CPU
         else:
             K_rev = torch.tensor(sigkernel_cython(G_static_rev.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         K_rev = flip(flip(K_rev,dim=1),dim=2)
-        KK = K[:,:-1,:-1] * K_rev[:,1:,1:]   
-        
-        # finite difference step 
+        KK = K[:,:-1,:-1] * K_rev[:,1:,1:]
+
+        # finite difference step
         h = 1e-9
 
-        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]  
+        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]
         Xh = Xh.permute(0,1,3,2)
         Xh = Xh.reshape(A,M*D,D)
 
-        G_h = static_kernel.batch_kernel(Xh,Y) 
+        G_h = static_kernel.batch_kernel(Xh,Y)
         G_h = G_h.reshape(A,M,D,N)
-        G_h = G_h.permute(0,1,3,2) 
+        G_h = G_h.permute(0,1,3,2)
 
         Diff_1 = G_h[:,1:,1:,:] - G_h[:,1:,:-1,:] - (G_static[:,1:,1:])[:,:,:,None] + (G_static[:,1:,:-1])[:,:,:,None]
-        Diff_1 =  tile( tile(Diff_1,1,2**dyadic_order)/float(2**dyadic_order),2, 2**dyadic_order)/float(2**dyadic_order)  
+        Diff_1 =  tile( tile(Diff_1,1,2**dyadic_order)/float(2**dyadic_order),2, 2**dyadic_order)/float(2**dyadic_order)
         Diff_2 = G_h[:,1:,1:,:] - G_h[:,1:,:-1,:] - (G_static[:,1:,1:])[:,:,:,None] + (G_static[:,1:,:-1])[:,:,:,None]
         Diff_2 += - G_h[:,:-1,1:,:] + G_h[:,:-1,:-1,:] + (G_static[:,:-1,1:])[:,:,:,None] - (G_static[:,:-1,:-1])[:,:,:,None]
-        Diff_2 = tile(tile(Diff_2,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)  
+        Diff_2 = tile(tile(Diff_2,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
         grad_1 = (KK[:,:,:,None] * Diff_1)/h
         grad_2 = (KK[:,:,:,None] * Diff_2)/h
@@ -350,7 +350,7 @@ class _SigKernelGram(torch.autograd.Function):
 
         # computing dsdt k(X^i_s,Y^j_t)
         G_static = static_kernel.Gram_matrix(X,Y)
-        G_static_ = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:] 
+        G_static_ = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:]
         G_static_ = tile(tile(G_static_,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
 
         # if on GPU
@@ -363,28 +363,28 @@ class _SigKernelGram(torch.autograd.Function):
             n_anti_diagonals = 2 * threads_per_block - 1
 
             # Prepare the tensor of output solutions to the PDE (forward)
-            G = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype) 
-            G[:,:,0,:] = 1.
-            G[:,:,:,0] = 1. 
+            G = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
+            G[:, :, 0, :] = 1.
+            G[:, :, :, 0] = 1.
 
             # Run the CUDA kernel.
-            blockspergrid = (A,B)
+            blockspergrid = (A, B)
             sigkernel_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
                                                                   MM+1, NN+1, n_anti_diagonals,
                                                                   cuda.as_cuda_array(G), _naive_solver)
 
-            G = G[:,:,:-1,:-1]
+            G = G[:, :, :-1, :-1]
 
         else:
             G = torch.tensor(sigkernel_Gram_cython(G_static_.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
         if X.requires_grad:
             grad_points = prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver)
-            ctx.save_for_backward(X, Y, grad_points)      
+            ctx.save_for_backward(X, Y, grad_points)
 
         return G[:,:,-1,-1]
 
-    
+
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -392,9 +392,7 @@ class _SigKernelGram(torch.autograd.Function):
         X, Y, grad_points = ctx.saved_tensors
 
         if Y.requires_grad:
-            # if torch.equal(X, Y):
-#             grad = (grad_output[:,:,None,None]*grad_points + grad_output.t()[:,:,None,None]*grad_points).sum(dim=1)
-            grad = 2*(grad_output[:,:,None,None]*grad_points).sum(dim=1)
+            grad = 2*(grad_output[:, :, None, None]*grad_points).sum(dim=1)
             return grad, None, None, None, None, None
 
         else:
@@ -404,8 +402,8 @@ class _SigKernelGram(torch.autograd.Function):
 
 def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_solver):
 
-        G_static_ = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:] 
-        G_static_ = tile(tile(G_static_,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
+        G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, :-1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, :-1, 1:]
+        G_static_ = tile(tile(G_static_, 2, 2**dyadic_order)/float(2**dyadic_order), 3, 2**dyadic_order)/float(2**dyadic_order)
 
         A = X.shape[0]
         B = Y.shape[0]
@@ -415,21 +413,21 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
 
         MM = (2**dyadic_order)*(M-1)
         NN = (2**dyadic_order)*(N-1)
-            
+
         # Reverse paths
         X_rev = torch.flip(X, dims=[1])
         Y_rev = torch.flip(Y, dims=[1])
 
         # computing dsdt k(X_rev^i_s,Y_rev^j_t) for variation of parameters
-        G_static_rev = flip(flip(G_static_,dim=2),dim=3)
+        G_static_rev = flip(flip(G_static_, dim=2), dim=3)
 
         # if on GPU
         if X.device.type in ['cuda']:
 
             # Prepare the tensor of output solutions to the PDE (backward)
-            G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype) 
-            G_rev[:,:,0,:] = 1.
-            G_rev[:,:,:,0] = 1. 
+            G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
+            G_rev[:, :, 0, :] = 1.
+            G_rev[:, :, :, 0] = 1.
 
             # cuda parameters
             threads_per_block = max(MM+1,NN+1)
@@ -441,44 +439,44 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
                                                                   MM+1, NN+1, n_anti_diagonals,
                                                                   cuda.as_cuda_array(G_rev), _naive_solver)
 
-            G_rev = G_rev[:,:,:-1,:-1]
+            G_rev = G_rev[:, :, :-1, :-1]
 
         # if on CPU
         else:
             G_rev = torch.tensor(sigkernel_Gram_cython(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
-        G_rev = flip(flip(G_rev,dim=2),dim=3)
-        GG = G[:,:,:-1,:-1] * G_rev[:,:,1:,1:]  # shape (A,B,MM,NN)   
+        G_rev = flip(flip(G_rev, dim=2), dim=3)
+        GG = G[:, :, :-1, :-1] * G_rev[:, :, 1:, 1:]  # shape (A,B,MM,NN)
 
-        # finite difference step 
+        # finite difference step
         h = 1e-9
 
-        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]  
+        Xh = X[:,:,:,None] + h*torch.eye(D, dtype=X.dtype, device=X.device)[None,None,:]
         Xh = Xh.permute(0,1,3,2)
         Xh = Xh.reshape(A,M*D,D)
 
-        G_h = static_kernel.Gram_matrix(Xh,Y) 
+        G_h = static_kernel.Gram_matrix(Xh,Y)
         G_h = G_h.reshape(A,B,M,D,N)
         G_h = G_h.permute(0,1,2,4,3) # shape (A,B,M,N,D)
 
         Diff_1 = G_h[:,:,1:,1:,:] - G_h[:,:,1:,:-1,:] - (G_static[:,:,1:,1:])[:,:,:,:,None] + (G_static[:,:,1:,:-1])[:,:,:,:,None]
-        Diff_1 =  tile(tile(Diff_1,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)  
+        Diff_1 =  tile(tile(Diff_1,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
         Diff_2 = G_h[:,:,1:,1:,:] - G_h[:,:,1:,:-1,:] - (G_static[:,:,1:,1:])[:,:,:,:,None] + (G_static[:,:,1:,:-1])[:,:,:,:,None]
         Diff_2 += - G_h[:,:,:-1,1:,:] + G_h[:,:,:-1,:-1,:] + (G_static[:,:,:-1,1:])[:,:,:,:,None] - (G_static[:,:,:-1,:-1])[:,:,:,:,None]
-        Diff_2 = tile(tile(Diff_2,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)  
+        Diff_2 = tile(tile(Diff_2,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
 
-        grad_1 = (GG[:,:,:,:,None] * Diff_1)/h     # shape (A,B,MM,NN,D) 
+        grad_1 = (GG[:,:,:,:,None] * Diff_1)/h     # shape (A,B,MM,NN,D)
         grad_2 = (GG[:,:,:,:,None] * Diff_2)/h
 
-        grad_1 = torch.sum(grad_1,axis=3)    # shape (A,B,MM,D) 
-        grad_1 = torch.sum(grad_1.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D) 
-        grad_2 = torch.sum(grad_2,axis=3)    # shape (A,B,MM,D) 
-        grad_2 = torch.sum(grad_2.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D) 
+        grad_1 = torch.sum(grad_1,axis=3)    # shape (A,B,MM,D)
+        grad_1 = torch.sum(grad_1.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D)
+        grad_2 = torch.sum(grad_2,axis=3)    # shape (A,B,MM,D)
+        grad_2 = torch.sum(grad_2.reshape(A,B,M-1,2**dyadic_order,D),axis=3)   # shape (A,B,M-1,D)
 
         grad_prev = grad_1[:,:,:-1,:] + grad_2[:,:,1:,:]  # /¯¯
         grad_next = torch.cat([torch.zeros((A, B, 1, D), dtype=X.dtype, device=X.device), grad_1[:,:,1:,:]], dim=2)   # /
         grad_incr = grad_prev - grad_1[:,:,1:,:]
-        grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)   # shape (A,B,M,D) 
+        grad_points = torch.cat([(grad_2[:,:,0,:]-grad_1[:,:,0,:])[:,:,None,:],grad_incr,grad_1[:,:,-1,:][:,:,None,:]],dim=2)   # shape (A,B,M,D)
 
         return grad_points
 
@@ -502,14 +500,14 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
     MM = (2 ** dyadic_order) * (M - 1)
     NN = (2 ** dyadic_order) * (N - 1)
 
-    G_static = static_kernel.batch_kernel(X, Y)
-    G_static_diff = static_kernel.batch_kernel(gamma, Y)
+    G_static = static_kernel.Gram_matrix(X, Y)
+    G_static_diff = static_kernel.Gram_matrix(gamma, Y)
 
     G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, -1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, -1, 1:]
     G_static_diff_ = G_static_diff[:, :, 1:, 1:] + G_static_diff[:, :, -1, :-1] - G_static_diff[:, :, 1:,:-1] - G_static_diff[:, :, -1, 1:]
 
-    G_static_ = tile(tile(G_static_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2, 2 ** dyadic_order) / float(2 ** dyadic_order)
-    G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 2, 2 ** dyadic_order) / float(2 ** dyadic_order)
+    G_static_ = tile(tile(G_static_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
+    G_static_diff_ = tile(tile(G_static_diff_, 1, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
 
     # if on GPU
     if X.device.type in ['cuda']:
@@ -530,11 +528,10 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
 
         # Compute the signature kernel and its derivative
         blockspergrid = (A, B)
-        sigkernel_derivatives_Gram_cuda[blockspergrid, threads_per_block](
-                                                              cuda.as_cuda_array(G_static_.detach()),
-                                                              cuda.as_cuda_array(G_static_diff_.detach()),
-                                                              MM + 1, NN + 1, n_anti_diagonals,
-                                                              cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
+        sigkernel_derivatives_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
+                                                                          cuda.as_cuda_array(G_static_diff_.detach()),
+                                                                          MM + 1, NN + 1, n_anti_diagonals,
+                                                                          cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
 
         K = K[:, :, :-1, :-1]
         K_diff = K_diff[:, :, -1, :-1]
@@ -578,16 +575,16 @@ def c_alpha(m, alpha):
     return 4. * np.sqrt(-np.log(alpha) / m)
 
 def hypothesis_test(y_pred, y_test, static_kernel, confidence_level=0.99, dyadic_order=0):
-    """Statistical test based on MMD distance to determine if 
+    """Statistical test based on MMD distance to determine if
        two sets of paths come from the same distribution.
     """
 
     k_sig = SigKernel(static_kernel, dyadic_order)
 
     m = max(y_pred.shape[0], y_test.shape[0])
-    
-    TU = k_sig.compute_mmd(y_pred,y_test)  
-  
+
+    TU = k_sig.compute_mmd(y_pred,y_test)
+
     c = torch.tensor(c_alpha(m, confidence_level), dtype=y_pred.dtype)
 
     if TU > c:
@@ -668,7 +665,7 @@ def SigKernel_naive(X, Y, static_kernel, dyadic_order=0, _naive_solver=False):
 
     # computing dsdt k(X^i_s,Y^i_t)
     G_static = static_kernel.batch_kernel(X,Y)
-    G_static = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:] 
+    G_static = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:]
     G_static = tile(tile(G_static,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
     for i in range(MM):
@@ -685,7 +682,7 @@ def SigKernel_naive(X, Y, static_kernel, dyadic_order=0, _naive_solver=False):
             else:
                 K_XY[:, i + 1, j + 1] = (k_10 + k_01)*(1.+0.5*increment+(1./12)*increment**2) - k_00*(1.-(1./12)*increment**2)
                 #K_XY[:, i + 1, j + 1] = k_01 + k_10 - k_00 + (torch.exp(0.5*increment) - 1.)*(k_01 + k_10)
-            
+
     return K_XY[:, -1, -1]
 
 
@@ -722,7 +719,7 @@ def SigKernelGramMat_naive(X,Y,static_kernel,dyadic_order=0,_naive_solver=False)
 
     # computing dsdt k(X^i_s,Y^j_t)
     G_static = static_kernel.Gram_matrix(X,Y)
-    G_static = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:] 
+    G_static = G_static[:,:,1:,1:] + G_static[:,:,:-1,:-1] - G_static[:,:,1:,:-1] - G_static[:,:,:-1,1:]
     G_static = tile(tile(G_static,2,2**dyadic_order)/float(2**dyadic_order),3,2**dyadic_order)/float(2**dyadic_order)
 
     for i in range(MM):
@@ -754,9 +751,9 @@ class SigMMD_naive(torch.nn.Module):
     def forward(self, X, Y):
 
         K_XX = SigKernelGramMat_naive(X,X,self.static_kernel,self.dyadic_order,self._naive_solver)
-        K_YY = SigKernelGramMat_naive(Y,Y,self.static_kernel,self.dyadic_order,self._naive_solver)  
+        K_YY = SigKernelGramMat_naive(Y,Y,self.static_kernel,self.dyadic_order,self._naive_solver)
         K_XY = SigKernelGramMat_naive(X,Y,self.static_kernel,self.dyadic_order,self._naive_solver)
-        
+
         K_XX_m = (torch.sum(K_XX) - torch.sum(torch.diag(K_XX))) / (K_XX.shape[0] * (K_XX.shape[0] - 1.))
         K_YY_m = (torch.sum(K_YY) - torch.sum(torch.diag(K_YY))) / (K_YY.shape[0] * (K_YY.shape[0] - 1.))
 
