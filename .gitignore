@@ -260,6 +260,10 @@ paket-files/
 __pycache__/
 *.pyc
 /examples/.ipynb_checkpoints
+/examples/performance_analysis.ipynb
+/examples/recombination.ipynb
+/examples/requirements.txt
+/examples/test_gradients.ipynb
 /examples/generative_model_S&P500.ipynb
 /examples/generative_model_Lotka_Volterra.ipynb
 /examples/test_gradients.ipynb
@@ -270,4 +274,4 @@ __pycache__/
 /utils/sqrtm.py
 /results/trained_models.pkl
 /.idea
-sigkernel.egg-info/
+/build
