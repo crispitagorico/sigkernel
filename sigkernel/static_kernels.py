@@ -11,6 +11,9 @@ from numba import cuda
 class LinearKernel():
     """Linear kernel k: R^d x R^d -> R"""
 
+    def __init__(self, scale):
+        self.scale = scale
+        
     def batch_kernel(self, X, Y):
         """Input: 
                   - X: torch tensor of shape (batch, length_X, dim),
@@ -18,7 +21,7 @@ class LinearKernel():
            Output: 
                   - matrix k(X^i_s,Y^i_t) of shape (batch, length_X, length_Y)
         """
-        return torch.bmm(X, Y.permute(0,2,1))
+        return torch.bmm(self.scale*X, Y.permute(0,2,1))
 
     def Gram_matrix(self, X, Y):
         """Input: 
