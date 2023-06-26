@@ -37,7 +37,7 @@ signature_kernel = sigkernel.SigKernel(static_kernel, dyadic_order)
 batch, len_x, len_y, dim = 5, 10, 20, 2
 X = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_x,dim)
 Y = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
-Z = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
+Z = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
 
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 K = signature_kernel.compute_kernel(X,Y,max_batch)
