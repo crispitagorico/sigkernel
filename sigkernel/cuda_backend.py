@@ -190,7 +190,7 @@ def sigkernel_derivatives_Gram_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diag
 
             M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10) * (1. + 0.5 * inc) - k_00
             M_sol_diff[block_id_x, block_id_y, i, j] = (k_01_diff + k_10_diff) * (1. + .5 * inc) - k_00_diff + .5 * inc_diff * (k_01 + k_10)
-            M_sol_diffdiff[block_id_x, block_id_y, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5 * inc) - k_00_diffdiff + .5 * inc_diff * (k_01_diff + k_10_diff + k_01 + k_10)
+            M_sol_diffdiff[block_id_x, block_id_y, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5 * inc) - k_00_diffdiff + inc_diff * (k_01_diff + k_10_diff)
 
         # Wait for other threads in this block
         cuda.syncthreads()
