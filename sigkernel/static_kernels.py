@@ -21,7 +21,7 @@ class LinearKernel():
            Output: 
                   - matrix k(X^i_s,Y^i_t) of shape (batch, length_X, length_Y)
         """
-        return torch.bmm(self.scale*X, Y.permute(0,2,1))
+        return torch.bmm(self.scale*X, self.scale*Y.permute(0,2,1))
 
     def Gram_matrix(self, X, Y):
         """Input: 
