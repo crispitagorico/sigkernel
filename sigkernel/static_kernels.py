@@ -11,7 +11,7 @@ from numba import cuda
 class LinearKernel():
     """Linear kernel k: R^d x R^d -> R"""
 
-    def __init__(self, scale):
+    def __init__(self, scale=1.0):
         self.scale = scale
         
     def batch_kernel(self, X, Y):
