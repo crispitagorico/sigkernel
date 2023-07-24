@@ -98,8 +98,20 @@ def sigkernel_derivatives_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diagonals
 
             # M_sol[block_id, i, j] = (k_01 + k_10) * (1. + .5*inc) - k_00
             M_sol[block_id, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
-            M_sol_diff[block_id, i, j] = (k_01_diff + k_10_diff) * (1. + .5*inc) - k_00_diff + .5*inc_diff*(k_01 + k_10)
-            M_sol_diffdiff[block_id, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5*inc) - k_00_diffdiff + .5*inc_diff*(k_01_diff + k_10_diff + k_01 + k_10)
+            
+            # M_sol_diff[block_id, i, j] = (k_01_diff + k_10_diff) * (1. + .5*inc) - k_00_diff + .5*inc_diff*(k_01 + k_10)
+            f1 = k_00*inc_diff + k_00_diff*inc
+            f2 = k_01*inc_diff + k_01_diff*inc
+            f3 = k_10*inc_diff + k_10_diff*inc
+            f4 = M_sol[block_id,i,j]*inc_diff + (k_01_diff + k_10_diff - k_00_diff + f1)*inc
+            M_sol_diff[block_id, i, j] = k_01_diff + k_10_diff - k_00_diff + 0.25*(f1 + f2 + f3 + f4)
+            
+            # M_sol_diffdiff[block_id, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5*inc) - k_00_diffdiff + .5*inc_diff*(k_01_diff + k_10_diff + k_01 + k_10)
+            g1 = 2.*k_00_diff*inc_diff + k_00_diffdiff*inc
+            g2 = 2.*k_01_diff*inc_diff + k_01_diffdiff*inc
+            g3 = 2.*k_10_diff*inc_diff + k_10_diffdiff*inc
+            g4 = 2.*M_sol_diff[block_id, i, j]*inc_diff + (k_01_diffdiff + k_10_diffdiff - k_00_diffdiff + g1)*inc
+            M_sol_diffdiff[block_id, i, j] = k_01_diffdiff + k_10_diffdiff - k_00_diffdiff + 0.25*(g1 + g2 + g3 + g4)
 
         # Wait for other threads in this block
         cuda.syncthreads()
@@ -189,10 +201,22 @@ def sigkernel_derivatives_Gram_cuda(M_inc, M_inc_diff, len_x, len_y, n_anti_diag
             k_10_diffdiff = M_sol_diffdiff[block_id_x, block_id_y, i, j-1]
             k_00_diffdiff = M_sol_diffdiff[block_id_x, block_id_y, i-1, j-1]
 
-            # M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10) * (1. + 0.5 * inc) - k_00
+            # M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10) * (1. + .5*inc) - k_00
             M_sol[block_id_x, block_id_y, i, j] = (k_01 + k_10)*(1. + 0.5*inc + (1./12)*inc**2) - k_00*(1. - (1./12)*inc**2)
-            M_sol_diff[block_id_x, block_id_y, i, j] = (k_01_diff + k_10_diff) * (1. + .5 * inc) - k_00_diff + .5 * inc_diff * (k_01 + k_10)
-            M_sol_diffdiff[block_id_x, block_id_y, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5 * inc) - k_00_diffdiff + inc_diff * (k_01_diff + k_10_diff)
+            
+            # M_sol_diff[block_id_x, block_id_y, i, j] = (k_01_diff + k_10_diff) * (1. + .5*inc) - k_00_diff + .5*inc_diff*(k_01 + k_10)
+            f1 = k_00*inc_diff + k_00_diff*inc
+            f2 = k_01*inc_diff + k_01_diff*inc
+            f3 = k_10*inc_diff + k_10_diff*inc
+            f4 = M_sol[block_id_x, block_id_y, i, j]*inc_diff + (k_01_diff + k_10_diff - k_00_diff + f1)*inc
+            M_sol_diff[block_id_x, block_id_y, i, j] = k_01_diff + k_10_diff - k_00_diff + 0.25*(f1 + f2 + f3 + f4)
+            
+            # M_sol_diffdiff[block_id_x, block_id_y, i, j] = (k_01_diffdiff + k_10_diffdiff) * (1. + .5*inc) - k_00_diffdiff + .5*inc_diff*(k_01_diff + k_10_diff + k_01 + k_10)
+            g1 = 2.*k_00_diff*inc_diff + k_00_diffdiff*inc
+            g2 = 2.*k_01_diff*inc_diff + k_01_diffdiff*inc
+            g3 = 2.*k_10_diff*inc_diff + k_10_diffdiff*inc
+            g4 = 2.*M_sol_diff[block_id_x, block_id_y, i, j]*inc_diff + (k_01_diffdiff + k_10_diffdiff - k_00_diffdiff + g1)*inc
+            M_sol_diffdiff[block_id_x, block_id_y, i, j] = k_01_diffdiff + k_10_diffdiff - k_00_diffdiff + 0.25*(g1 + g2 + g3 + g4)
 
         # Wait for other threads in this block
         cuda.syncthreads()
