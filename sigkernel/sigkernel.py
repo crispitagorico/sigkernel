@@ -480,11 +480,12 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
 
         return grad_points
 
-def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
+def k_kgrad(X, Y, gamma, dyadic_order, static_kernel, eps=1e-4):
     """Input:
               - X: torch tensor of shape (batch_x, length_X, dim),
               - Y: torch tensor of shape (batch_y, length_Y, dim),
               - gamma: torch tensor of shape (batch_x, length_X, dim)
+              - parameter for derivative of static kernel lift
        Output:
               - vector of shape (batch_x,batch_y) of signature kernel k(X^i_T,Y^j_T)
               - vector of shape (batch_x,batch_y) of directional derivatives k_gamma^i(X^i_T,Y^j_T)
@@ -500,14 +501,26 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
     MM = (2 ** dyadic_order) * (M - 1)
     NN = (2 ** dyadic_order) * (N - 1)
 
-    G_static = static_kernel.Gram_matrix(X, Y)
-    G_static_diff = static_kernel.Gram_matrix(gamma, Y)
-
+    G_static  = static_kernel.Gram_matrix(X, Y)
     G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, :-1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, :-1, 1:]
-    G_static_diff_ = G_static_diff[:, :, 1:, 1:] + G_static_diff[:, :, :-1, :-1] - G_static_diff[:, :, 1:, :-1] - G_static_diff[:, :, :-1, 1:]
+    
+    G_static_diff_1  = -(1./eps)*G_static
+    G_static_diff_2  = (1./eps)*static_kernel.Gram_matrix(X + eps*gamma, Y) 
+    G_static_diff_1_ = G_static_diff_1[:, :, 1:, 1:] + G_static_diff_1[:, :, :-1, :-1] - G_static_diff_1[:, :, 1:, :-1] - G_static_diff_1[:, :, :-1, 1:]
+    G_static_diff_2_ = G_static_diff_2[:, :, 1:, 1:] + G_static_diff_2[:, :, :-1, :-1] - G_static_diff_2[:, :, 1:, :-1] - G_static_diff_2[:, :, :-1, 1:]
+    G_static_diff_   = G_static_diff_1_ + G_static_diff_2_
 
+    G_static_diffdiff_1  = -(1./eps)*G_static_diff_1
+    G_static_diffdiff_2  = -(2./eps)*G_static_diff_2
+    G_static_diffdiff_3  = (1./eps**2)*static_kernel.Gram_matrix(X + 2.*eps*gamma, Y)
+    G_static_diffdiff_1_ = G_static_diffdiff_1[:, :, 1:, 1:] + G_static_diffdiff_1[:, :, :-1, :-1] - G_static_diffdiff_1[:, :, 1:, :-1] - G_static_diffdiff_1[:, :, :-1, 1:]
+    G_static_diffdiff_2_ = G_static_diffdiff_2[:, :, 1:, 1:] + G_static_diffdiff_2[:, :, :-1, :-1] - G_static_diffdiff_2[:, :, 1:, :-1] - G_static_diffdiff_2[:, :, :-1, 1:]
+    G_static_diffdiff_3_ = G_static_diffdiff_3[:, :, 1:, 1:] + G_static_diffdiff_3[:, :, :-1, :-1] - G_static_diffdiff_3[:, :, 1:, :-1] - G_static_diffdiff_3[:, :, :-1, 1:]
+    G_static_diffdiff_   = G_static_diffdiff_1_ + G_static_diffdiff_2_ + G_static_diffdiff_3_
+    
     G_static_ = tile(tile(G_static_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
     G_static_diff_ = tile(tile(G_static_diff_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
+    G_static_diffdiff_ = tile(tile(G_static_diffdiff_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
 
     # if on GPU
     if X.device.type in ['cuda']:
@@ -530,6 +543,7 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel):
         blockspergrid = (A, B)
         sigkernel_derivatives_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
                                                                           cuda.as_cuda_array(G_static_diff_.detach()),
+                                                                          cuda.as_cuda_array(G_static_diffdiff_.detach()),
                                                                           MM + 1, NN + 1, n_anti_diagonals,
                                                                           cuda.as_cuda_array(K), cuda.as_cuda_array(K_diff), cuda.as_cuda_array(K_diffdiff))
 
