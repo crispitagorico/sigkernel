@@ -116,7 +116,7 @@ class RBF_CEXP_Kernel(RBFKernel):
 class RBF_SQR_Kernel():
     """RBF SQR kernel k: H x H -> R"""
 
-    def __init__(self, sigma1, sigma2):
+    def __init__(self, sigma_1, sigma_2):
         self.rbf1 = RBFKernel(sigma_1)
         self.rbf2 = RBFKernel(sigma_2)
 
