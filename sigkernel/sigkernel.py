@@ -5,6 +5,7 @@ from numba import cuda
 
 from cython_backend import sigkernel_cython, sigkernel_Gram_cython, sigkernel_derivatives_Gram_cython
 from .cuda_backend import sigkernel_cuda, sigkernel_Gram_cuda, sigkernel_derivatives_Gram_cuda
+from .mps_backend import sigkernel_mps, sigkernel_Gram_mps, sigkernel_derivatives_Gram_mps
 
 from .static_kernels import *
 
@@ -216,27 +217,31 @@ class _SigKernel(torch.autograd.Function):
         G_static_ = G_static[:,1:,1:] + G_static[:,:-1,:-1] - G_static[:,1:,:-1] - G_static[:,:-1,1:]
         G_static_ = tile(tile(G_static_,1,2**dyadic_order)/float(2**dyadic_order),2,2**dyadic_order)/float(2**dyadic_order)
 
-        # if on GPU
-        if X.device.type in ['cuda']:
+        if X.device.type == 'cuda':
 
             assert max(MM+1,NN+1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
-            # cuda parameters
             threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
-            # Prepare the tensor of output solutions to the PDE (forward)
             K = torch.zeros((A, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
             K[:,0,:] = 1.
             K[:,:,0] = 1.
 
-            # Compute the forward signature kernel
             sigkernel_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
                                                  MM+1, NN+1, n_anti_diagonals,
                                                  cuda.as_cuda_array(K), _naive_solver)
             K = K[:,:-1,:-1]
 
-        # if on CPU
+        elif X.device.type == 'mps':
+
+            K = torch.zeros((A, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
+            K[:,0,:] = 1.
+            K[:,:,0] = 1.
+
+            sigkernel_mps(G_static_.detach(), MM+1, NN+1, K, _naive_solver)
+            K = K[:,:-1,:-1]
+
         else:
             K = torch.tensor(sigkernel_cython(G_static_.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
@@ -274,26 +279,31 @@ class _SigKernel(torch.autograd.Function):
         # computing dsdt k(X_rev^i_s,Y_rev^i_t) for variation of parameters
         G_static_rev = flip(flip(G_static_,dim=1),dim=2)
 
-        # if on GPU
-        if X.device.type in ['cuda']:
+        if X.device.type == 'cuda':
 
-            # Prepare the tensor of output solutions to the PDE (backward)
             K_rev = torch.zeros((A, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype)
             K_rev[:,0,:] = 1.
             K_rev[:,:,0] = 1.
 
-            # cuda parameters
             threads_per_block = max(MM,NN)
             n_anti_diagonals = 2 * threads_per_block - 1
 
-            # Compute signature kernel for reversed paths
             sigkernel_cuda[A, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()),
                                                  MM+1, NN+1, n_anti_diagonals,
                                                  cuda.as_cuda_array(K_rev), _naive_solver)
 
             K_rev = K_rev[:,:-1,:-1]
 
-        # if on CPU
+        elif X.device.type == 'mps':
+
+            K_rev = torch.zeros((A, MM+2, NN+2), device=G_static_rev.device, dtype=G_static_rev.dtype)
+            K_rev[:,0,:] = 1.
+            K_rev[:,:,0] = 1.
+
+            sigkernel_mps(G_static_rev.detach(), MM+1, NN+1, K_rev, _naive_solver)
+
+            K_rev = K_rev[:,:-1,:-1]
+
         else:
             K_rev = torch.tensor(sigkernel_cython(G_static_rev.detach().numpy(), _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
@@ -353,25 +363,31 @@ class _SigKernelGram(torch.autograd.Function):
         G_static_ = G_static[:, :, 1:, 1:] + G_static[:, :, :-1, :-1] - G_static[:, :, 1:, :-1] - G_static[:, :, :-1, 1:]
         G_static_ = tile(tile(G_static_, 2, 2**dyadic_order)/float(2**dyadic_order), 3, 2**dyadic_order)/float(2**dyadic_order)
 
-        # if on GPU
-        if X.device.type in ['cuda']:
+        if X.device.type == 'cuda':
 
             assert max(MM,NN) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
-            # cuda parameters
             threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
-            # Prepare the tensor of output solutions to the PDE (forward)
             G = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
             G[:, :, 0, :] = 1.
             G[:, :, :, 0] = 1.
 
-            # Run the CUDA kernel.
             blockspergrid = (A, B)
             sigkernel_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
                                                                   MM+1, NN+1, n_anti_diagonals,
                                                                   cuda.as_cuda_array(G), _naive_solver)
+
+            G = G[:, :, :-1, :-1]
+
+        elif X.device.type == 'mps':
+
+            G = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
+            G[:, :, 0, :] = 1.
+            G[:, :, :, 0] = 1.
+
+            sigkernel_Gram_mps(G_static_.detach(), MM+1, NN+1, G, _naive_solver)
 
             G = G[:, :, :-1, :-1]
 
@@ -421,19 +437,15 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
         # computing dsdt k(X_rev^i_s,Y_rev^j_t) for variation of parameters
         G_static_rev = flip(flip(G_static_, dim=2), dim=3)
 
-        # if on GPU
-        if X.device.type in ['cuda']:
+        if X.device.type == 'cuda':
 
-            # Prepare the tensor of output solutions to the PDE (backward)
             G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
             G_rev[:, :, 0, :] = 1.
             G_rev[:, :, :, 0] = 1.
 
-            # cuda parameters
             threads_per_block = max(MM+1,NN+1)
             n_anti_diagonals = 2 * threads_per_block - 1
 
-            # Compute signature kernel for reversed paths
             blockspergrid = (A,B)
             sigkernel_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_rev.detach()),
                                                                   MM+1, NN+1, n_anti_diagonals,
@@ -441,7 +453,16 @@ def prep_backward(X, Y, G, G_static, sym, static_kernel, dyadic_order, _naive_so
 
             G_rev = G_rev[:, :, :-1, :-1]
 
-        # if on CPU
+        elif X.device.type == 'mps':
+
+            G_rev = torch.zeros((A, B, MM+2, NN+2), device=G_static.device, dtype=G_static.dtype)
+            G_rev[:, :, 0, :] = 1.
+            G_rev[:, :, :, 0] = 1.
+
+            sigkernel_Gram_mps(G_static_rev.detach(), MM+1, NN+1, G_rev, _naive_solver)
+
+            G_rev = G_rev[:, :, :-1, :-1]
+
         else:
             G_rev = torch.tensor(sigkernel_Gram_cython(G_static_rev.detach().numpy(), sym, _naive_solver), dtype=G_static.dtype, device=G_static.device)
 
@@ -522,16 +543,13 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel, eps=1e-4):
     G_static_diff_ = tile(tile(G_static_diff_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
     G_static_diffdiff_ = tile(tile(G_static_diffdiff_, 2, 2 ** dyadic_order) / float(2 ** dyadic_order), 3, 2 ** dyadic_order) / float(2 ** dyadic_order)
 
-    # if on GPU
-    if X.device.type in ['cuda']:
+    if X.device.type == 'cuda':
 
         assert max(MM + 1, NN + 1) < 1024, 'n must be lowered or data must be moved to CPU as the current choice of n makes exceed the thread limit'
 
-        # cuda parameters
         threads_per_block = max(MM + 1, NN + 1)
         n_anti_diagonals = 2 * threads_per_block - 1
 
-        # Prepare the tensor of output solutions to the PDE
         K = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
         K_diff = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
         K_diffdiff = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
@@ -539,7 +557,6 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel, eps=1e-4):
         K[:, :, 0, :] = 1.
         K[:, :, :, 0] = 1.
 
-        # Compute the signature kernel and its derivative
         blockspergrid = (A, B)
         sigkernel_derivatives_Gram_cuda[blockspergrid, threads_per_block](cuda.as_cuda_array(G_static_.detach()),
                                                                           cuda.as_cuda_array(G_static_diff_.detach()),
@@ -551,7 +568,22 @@ def k_kgrad(X, Y, gamma, dyadic_order, static_kernel, eps=1e-4):
         K_diff = K_diff[:, :, :-1, :-1]
         K_diffdiff = K_diffdiff[:, :, :-1, :-1]
 
-    # if on CPU
+    elif X.device.type == 'mps':
+
+        K = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K_diff = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+        K_diffdiff = torch.zeros((A, B, MM + 2, NN + 2), device=G_static.device, dtype=G_static.dtype)
+
+        K[:, :, 0, :] = 1.
+        K[:, :, :, 0] = 1.
+
+        sigkernel_derivatives_Gram_mps(G_static_.detach(), G_static_diff_.detach(), G_static_diffdiff_.detach(),
+                                      MM + 1, NN + 1, K, K_diff, K_diffdiff)
+
+        K = K[:, :, :-1, :-1]
+        K_diff = K_diff[:, :, :-1, :-1]
+        K_diffdiff = K_diffdiff[:, :, :-1, :-1]
+
     else:
         K, K_diff, K_diffdiff = sigkernel_derivatives_Gram_cython(G_static_.detach().numpy(), G_static_diff_.detach().numpy())
         K = torch.tensor(K, dtype=G_static.dtype, device=G_static.device)
@@ -568,7 +600,8 @@ def flip(x, dim):
     xsize = x.size()
     dim = x.dim() + dim if dim < 0 else dim
     x = x.view(-1, *xsize[dim:])
-    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1, -1, -1), ('cpu','cuda')[x.is_cuda])().long(), :]
+    device = 'cpu' if x.device.type == 'cpu' else x.device.type
+    x = x.view(x.size(0), x.size(1), -1)[:, getattr(torch.arange(x.size(1)-1, -1, -1), device)().long(), :]
     return x.view(xsize)
 # ===========================================================================================================
 def tile(a, dim, n_tile):

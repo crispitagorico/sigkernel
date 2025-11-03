@@ -167,11 +167,15 @@ if __name__ == '__main__':
                 #==================================================================================
                 # Signature PDE kernel
                 #==================================================================================
-                # move to cuda (if available and memory doesn't exceed a certain threshold)
                 if x_train.shape[0] <= 150 and x_train.shape[1] <=150 and x_train.shape[2] <= 8:
-                    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                    if torch.cuda.is_available():
+                        device = torch.device('cuda')
+                    elif torch.backends.mps.is_available():
+                        device = torch.device('mps')
+                    else:
+                        device = torch.device('cpu')
                     dtype = torch.float32
-                else: # otherwise do computations in cython
+                else:
                     device = 'cpu'
                     dtype = torch.float64
                 

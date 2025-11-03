@@ -15,6 +15,23 @@ pip install git+https://github.com/crispitagorico/sigkernel.git
 
 Requires PyTorch >=1.6.0, Numba >= 0.50 and Cython >= 0.29.
 
+## GPU Support
+
+The library automatically detects and uses available GPU acceleration:
+
+### NVIDIA GPUs (CUDA)
+Automatically detected when PyTorch with CUDA is installed. Supports paths up to 1024 points per dimension.
+
+### Apple Silicon GPUs (MPS)
+Automatically detected on M1/M2/M3 Macs with PyTorch >= 1.12. No size limits. Move tensors to MPS device:
+```python
+X = X.to('mps')
+Y = Y.to('mps')
+```
+
+### Performance Priority
+The library automatically selects: CUDA (fastest for large paths) > MPS (good performance on Apple Silicon) > CPU (fallback via Cython).
+
 ## How to use the library
 
 ```python
@@ -35,9 +52,11 @@ signature_kernel = sigkernel.SigKernel(static_kernel, dyadic_order)
 
 # Synthetic data
 batch, len_x, len_y, dim = 5, 10, 20, 2
-X = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_x,dim)
-Y = torch.rand((batch,len_y,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
-Z = torch.rand((batch,len_x,dim), dtype=torch.float64, device='cuda') # shape (batch,len_y,dim)
+# Use 'cuda', 'mps', or 'cpu' depending on available hardware
+device = 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
+X = torch.rand((batch,len_x,dim), dtype=torch.float64, device=device) # shape (batch,len_x,dim)
+Y = torch.rand((batch,len_y,dim), dtype=torch.float64, device=device) # shape (batch,len_y,dim)
+Z = torch.rand((batch,len_x,dim), dtype=torch.float64, device=device) # shape (batch,len_y,dim)
 
 # Compute signature kernel "batch-wise" (i.e. k(x_1,y_1),...,k(x_batch, y_batch))
 K = signature_kernel.compute_kernel(X,Y,max_batch)
