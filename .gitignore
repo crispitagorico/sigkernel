@@ -276,3 +276,5 @@ __pycache__/
 /.idea
 /build
 /venv
+*.so
+sigkernel/cython_backend.c
